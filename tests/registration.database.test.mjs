@@ -1,0 +1,191 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { spawn, spawnSync } from "node:child_process";
+import { readFileSync, readdirSync } from "node:fs";
+import test from "node:test";
+
+// An isolated, network-less container: never reads or modifies the linked project.
+const container = `door-list-registration-test-${process.pid}`;
+const image = process.env.REGISTRATION_TEST_POSTGRES_IMAGE || "postgres:16";
+const owner = randomUUID();
+const owner2 = randomUUID();
+const today = "(clock_timestamp() at time zone 'America/Mexico_City')::date";
+const startsAt = (offset = 1) => `((${today} + ${offset}) + time '00:01') at time zone 'America/Mexico_City'`;
+
+function docker(args, input) {
+  const result = spawnSync("docker", args, { input, encoding: "utf8", timeout: 60_000 });
+  if (result.error || result.status !== 0) throw new Error(result.error?.message || result.stderr || result.stdout);
+  return result.stdout.trim();
+}
+// TCP skips the temporary socket-only server used during image initialization.
+const psql = ["exec", "-i", "-e", "PGPASSWORD=isolated-test-only", container, "psql", "-h", "127.0.0.1", "-U", "postgres", "-X", "-qAt", "-v", "ON_ERROR_STOP=1"];
+const sql = (query) => docker(psql, query);
+const rpc = (event, ticket, email = `${randomUUID()}@example.com`, name = "Ana") =>
+  `select public.register_event_attendee('${event}', '${ticket}', '${name}', '${email}');`;
+const register = (...args) => JSON.parse(sql(`set role anon; ${rpc(...args)}`));
+const availability = (event) => JSON.parse(sql(`set role anon; select public.get_public_registration_event('${event}');`) || "null");
+const count = (event) => Number(sql(`select count(*) from public.registrations where event_id = '${event}';`));
+
+function concurrent(query) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("docker", psql, { stdio: ["pipe", "pipe", "pipe"] });
+    let output = "", error = "";
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.stderr.on("data", (chunk) => { error += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => code === 0 ? resolve(output.trim()) : reject(new Error(error)));
+    child.stdin.end(query);
+  });
+}
+
+function fixture({ capacity = 2, offset = 1, status = "published" } = {}) {
+  const event = randomUUID(), ticket = randomUUID();
+  sql(`begin;
+    insert into public.event (id, owner_id, title, venue, capacity, starts_at, status)
+      values ('${event}', '${owner}', 'Evento de prueba', 'CDMX', ${capacity}, ${startsAt(offset)}, '${status}');
+    insert into public.ticket_types (id, event_id, name, capacity) values ('${ticket}', '${event}', 'General', ${capacity});
+    commit;`);
+  return { event, ticket };
+}
+
+test("public registration database integration", { timeout: 120_000 }, async (t) => {
+  docker(["run", "--rm", "-d", "--name", container, "--network", "none", "-e", "POSTGRES_PASSWORD=isolated-test-only", image]);
+  try {
+    for (let attempt = 0; ; attempt++) {
+      try { sql("select 1;"); break; } catch (error) {
+        if (attempt === 40) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+    sql(`create role anon nologin; create role authenticated nologin;
+      create schema auth; create table auth.users (id uuid primary key);
+      create function auth.uid() returns uuid language sql stable as
+        $$select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid$$;
+      grant usage on schema auth to anon, authenticated;
+      grant execute on function auth.uid() to anon, authenticated;
+      insert into auth.users values ('${owner}'), ('${owner2}');`);
+    const migrations = new URL("../supabase/migrations/", import.meta.url);
+    const files = readdirSync(migrations).filter((file) => file.endsWith(".sql")).sort();
+    // Verify the pending compatibility migration preserves existing capacities.
+    sql(readFileSync(new URL(files[0], migrations), "utf8"));
+    const existing = fixture({ capacity: 20 });
+    sql(`update public.event set capacity = 99 where id = '${existing.event}';`);
+    for (const file of files.slice(1)) sql(readFileSync(new URL(file, migrations), "utf8"));
+    assert.equal(Number(sql(`select capacity from public.event where id = '${existing.event}';`)), 99);
+
+    await t.test("today (including after start) and future are available; past, draft and missing are private", () => {
+      for (const offset of [0, 1]) {
+        const { event, ticket } = fixture({ offset });
+        assert.equal(availability(event).id, event);
+        assert.equal(register(event, ticket).code, "success");
+      }
+      for (const settings of [{ offset: -1 }, { status: "draft" }]) {
+        const { event, ticket } = fixture(settings);
+        assert.equal(availability(event), null);
+        assert.equal(register(event, ticket).code, "event_unavailable");
+        assert.equal(count(event), 0);
+      }
+      assert.equal(availability(randomUUID()), null);
+      // UTC 02:00 still belongs to the previous calendar date in Mexico City.
+      assert.equal(sql("select ('2026-10-27 02:00:00+00'::timestamptz at time zone 'America/Mexico_City')::date;"), "2026-10-26");
+    });
+
+    await t.test("validation, ownership of tickets, normalized uniqueness and minimum returned data", () => {
+      const { event, ticket } = fixture();
+      const other = fixture();
+      assert.equal(register(event, ticket, "bad-email").code, "invalid_input");
+      assert.equal(register(event, ticket, "ana@example.com", "   ").code, "invalid_input");
+      assert.equal(register(event, other.ticket).code, "ticket_unavailable");
+      assert.equal(register(event, ticket, " ANA@EXAMPLE.COM ", " Ana ").code, "success");
+      assert.equal(register(event, ticket, "ana@example.com").code, "duplicate");
+      assert.equal(count(event), 1);
+      assert.equal(sql(`select name || ':' || email from public.registrations where event_id = '${event}';`), "Ana:ana@example.com");
+      const publicData = JSON.stringify(availability(event));
+      assert.ok(!publicData.includes("ana@example.com") && !publicData.includes(owner));
+      assert.equal(availability(event).ticket_types[0].remaining, 1);
+    });
+
+    await t.test("rechecks unpublished, past, deleted and sold-out choices after initial read", () => {
+      const { event, ticket } = fixture({ capacity: 1 });
+      assert.equal(availability(event).ticket_types[0].remaining, 1);
+      sql(`update public.event set status = 'draft' where id = '${event}';`);
+      assert.equal(register(event, ticket).code, "event_unavailable");
+      sql(`update public.event set status = 'published', starts_at = ${startsAt(-1)} where id = '${event}';`);
+      assert.equal(register(event, ticket).code, "event_unavailable");
+      sql(`update public.event set starts_at = ${startsAt()} where id = '${event}';`);
+      assert.equal(register(event, ticket).code, "success");
+      assert.equal(register(event, ticket).code, "ticket_unavailable");
+      assert.equal(count(event), 1);
+      const removed = fixture({ capacity: 2 });
+      const spare = randomUUID();
+      sql(`begin; update public.ticket_types set capacity = 1 where id = '${removed.ticket}';
+        insert into public.ticket_types (id, event_id, name, capacity) values ('${spare}', '${removed.event}', 'Otra', 1); commit;
+        delete from public.ticket_types where id = '${removed.ticket}';`);
+      assert.equal(register(removed.event, removed.ticket).code, "ticket_unavailable");
+      assert.equal(register(removed.event, spare).code, "success");
+    });
+
+    await t.test("two concurrent requests for the last spot create exactly one attendee", async () => {
+      const { event, ticket } = fixture({ capacity: 1 });
+      // Keep the first transaction open to ensure the second must wait on it.
+      const first = concurrent(`begin; set role anon; ${rpc(event, ticket)} select pg_sleep(0.5); commit;`);
+      const second = concurrent(`set role anon; ${rpc(event, ticket)}`);
+      const results = await Promise.all([first, second]);
+      assert.deepEqual(results.map((value) => JSON.parse(value).code).sort(), ["success", "ticket_unavailable"]);
+      assert.equal(count(event), 1);
+    });
+
+    await t.test("concurrent retries of an email, even across tickets, create only one record", async () => {
+      const { event, ticket } = fixture({ capacity: 4 });
+      const secondTicket = randomUUID();
+      sql(`begin; update public.ticket_types set capacity = 2 where id = '${ticket}';
+        insert into public.ticket_types (id, event_id, name, capacity) values ('${secondTicket}', '${event}', 'VIP', 2); commit;`);
+      const results = await Promise.all([
+        concurrent(`begin; set role anon; ${rpc(event, ticket, "same@example.com")} select pg_sleep(0.5); commit;`),
+        concurrent(`set role anon; ${rpc(event, secondTicket, "SAME@example.com")}`),
+      ]);
+      assert.deepEqual(results.map((value) => JSON.parse(value).code).sort(), ["duplicate", "success"]);
+      assert.equal(count(event), 1);
+    });
+
+    await t.test("protects existing attendees against capacity reductions, deletion and reassignment", () => {
+      const { event, ticket } = fixture();
+      register(event, ticket); register(event, ticket);
+      const organizer = `set role authenticated; set request.jwt.claim.sub = '${owner}';`;
+      assert.throws(() => sql(`${organizer} update public.ticket_types set capacity = 1 where id = '${ticket}';`), /menor que sus registros/);
+      assert.throws(() => sql(`${organizer} update public.event set capacity = 1 where id = '${event}';`), /menor que sus registros/);
+      assert.throws(() => sql(`${organizer} delete from public.ticket_types where id = '${ticket}';`), /foreign key constraint/);
+      assert.throws(() => sql(`${organizer} delete from public.event where id = '${event}';`), /foreign key constraint/);
+      const other = fixture();
+      assert.throws(() => sql(`update public.ticket_types set event_id = '${other.event}', name = 'Moved' where id = '${ticket}';`), /foreign key constraint/);
+    });
+
+    await t.test("capacity changes racing with registration cannot leave an overbooked ticket", async () => {
+      const { event, ticket } = fixture({ capacity: 2 });
+      assert.equal(register(event, ticket).code, "success");
+      const results = await Promise.allSettled([
+        concurrent(`begin; set role anon; ${rpc(event, ticket)} select pg_sleep(0.5); commit;`),
+        concurrent(`update public.ticket_types set capacity = 1 where id = '${ticket}';`),
+      ]);
+      assert.equal(results[0].status, "fulfilled");
+      assert.ok(["success", "ticket_unavailable"].includes(JSON.parse(results[0].value).code));
+      assert.ok(count(event) <= Number(sql(`select capacity from public.ticket_types where id = '${ticket}';`)));
+      if (results[1].status === "rejected") assert.match(results[1].reason.message, /menor que sus registros/);
+    });
+
+    await t.test("anonymous and authenticated clients cannot access personal data or write directly", () => {
+      const { event, ticket } = fixture();
+      for (const role of ["anon", "authenticated"]) {
+        assert.throws(() => sql(`set role ${role}; select * from public.registrations;`), /permission denied/);
+        assert.throws(() => sql(`set role ${role}; insert into public.registrations (event_id, ticket_type_id, name, email)
+          values ('${event}', '${ticket}', 'Bypass', 'bypass@example.com');`), /permission denied/);
+        assert.throws(() => sql(`set role ${role}; update public.registrations set email = 'changed@example.com';`), /permission denied/);
+        assert.throws(() => sql(`set role ${role}; delete from public.registrations;`), /permission denied/);
+        assert.equal(JSON.parse(sql(`set role ${role}; ${rpc(event, ticket)}`)).code, "success");
+      }
+      assert.equal(count(event), 2);
+    });
+  } finally {
+    docker(["stop", "--time", "1", container]);
+  }
+});

@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   createEvent,
@@ -32,6 +34,7 @@ function localDateTime(value: string) {
 const field = "mt-1 w-full border border-[#18231f]/20 bg-white px-3 py-2 text-sm outline-none focus:border-[#18231f]";
 
 export default async function OrganizerPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  await connection();
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) redirect("/acceso");
@@ -70,6 +73,19 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
           </form>
         </section>
 
+        {events.length > 0 && (
+          <section className="mt-6 border border-[#18231f]/15 bg-white/65 p-6">
+            <h2 className="text-2xl font-semibold">Crear tipo de entrada</h2>
+            <p className="mt-1 text-sm text-[#4f5d56]">Selecciona uno de tus eventos registrados para asignarle la entrada.</p>
+            <form action={createTicketType} className="mt-6 flex flex-wrap items-end gap-4">
+              <label className="text-sm font-medium">Evento<select name="event_id" required className={`${field} min-w-56`}><option value="">Selecciona un evento</option>{events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}</select></label>
+              <label className="text-sm font-medium">Nombre<input name="name" placeholder="Ej. General" required className={`${field} w-48`} /></label>
+              <label className="text-sm font-medium">Aforo<input name="capacity" type="number" min="1" required className={`${field} w-28`} /></label>
+              <button className="border border-[#18231f] px-4 py-2 text-sm font-semibold">Añadir entrada</button>
+            </form>
+          </section>
+        )}
+
         <section className="mt-10 space-y-8">
           {events.length === 0 && <p className="text-[#4f5d56]">Aún no tienes eventos.</p>}
           {events.map((event) => {
@@ -80,6 +96,9 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
                   <h2 className="text-2xl font-semibold">{event.title}</h2>
                   <span className="border border-[#18231f]/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">{event.status === "published" ? "Publicado" : "Borrador"}</span>
                 </div>
+                {event.status === "published" && (
+                  <Link href={`/eventos/${event.id}/registro`} prefetch={false} className="mt-4 inline-block text-sm font-semibold underline">Abrir página pública de registro</Link>
+                )}
                 <form action={updateEvent} className="mt-5 grid gap-4 md:grid-cols-2">
                   <input type="hidden" name="event_id" value={event.id} />
                   <label className="text-sm font-medium">Nombre<input name="title" defaultValue={event.title} required className={field} /></label>
@@ -94,12 +113,6 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
 
                 <div className="mt-8 border-t border-[#18231f]/15 pt-6">
                   <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-xl font-semibold">Tipos de entrada</h3><p className="text-sm text-[#4f5d56]">Aforo asignado: {assigned} / {event.capacity}</p></div>
-                  <form action={createTicketType} className="mt-4 flex flex-wrap gap-3">
-                    <input type="hidden" name="event_id" value={event.id} />
-                    <input name="name" placeholder="Ej. General" required className={`${field} max-w-xs`} />
-                    <input name="capacity" type="number" min="1" placeholder="Aforo" required className={`${field} w-28`} />
-                    <button className="border border-[#18231f] px-4 py-2 text-sm font-semibold">Añadir entrada</button>
-                  </form>
                   <div className="mt-4 space-y-3">
                     {event.ticket_types.map((ticket) => (
                       <div key={ticket.id} className="flex flex-wrap items-end gap-3 border border-[#18231f]/10 p-3">

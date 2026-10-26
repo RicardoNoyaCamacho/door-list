@@ -1,5 +1,34 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Registro público
+
+La ruta `/eventos/[eventId]/registro` permite registrarse sin cuenta en eventos publicados,
+hasta el final de su fecha en `America/Mexico_City`. El panel del organizador incluye
+el enlace para compartir. Cada registro ocupa una plaza y cada email normalizado admite
+un solo registro por evento. La confirmación aparece en pantalla; no se envían correos.
+
+Antes de desplegar la página, aplica las migraciones de `supabase/migrations` con el
+flujo habitual del proyecto (`npx supabase db push` para el proyecto vinculado).
+La RPC `get_public_registration_event` expone información pública y cupos agregados;
+`register_event_attendee` valida y crea el registro en una transacción. Ambas admiten
+los roles `anon` y `authenticated`; la tabla `registrations` no permite acceso directo
+a esos roles. No se necesita una clave de servicio.
+
+Los eventos y tipos de entrada con registros no se pueden eliminar ni reducir por
+debajo de sus plazas ocupadas. Los cambios de entrada y los registros comparten un
+bloqueo del evento para proteger el cupo ante solicitudes concurrentes.
+
+## Verificación
+
+- `npm test`: validación de campos e identificadores (Node.js 22.18+).
+- `npm run test:db`: migraciones, permisos, fechas, duplicados y concurrencia real en
+  PostgreSQL. Requiere Docker; crea un contenedor sin red y lo elimina al terminar.
+  Usa `postgres:16` por defecto; puedes cambiar la imagen mediante
+  `REGISTRATION_TEST_POSTGRES_IMAGE=postgres:17 npm run test:db`.
+- `npm run lint` y `npm run build`: comprobaciones de código y compilación.
+
+Las pruebas no usan ni modifican la base de datos vinculada.
+
 ## Getting Started
 
 First, run the development server:
