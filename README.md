@@ -1,5 +1,13 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Eventos públicos
+
+La ruta `/` lista eventos publicados desde el inicio del día actual en
+`America/Mexico_City`, ordenados por fecha. Se puede consultar sin sesión y cada
+evento enlaza a su registro público. Los eventos de hoy permanecen visibles
+aunque su hora haya pasado; el cupo se comprueba al registrarse. El panel privado
+continúa en `/organizador`, con acceso mediante `/acceso`.
+
 ## Registro público
 
 La ruta `/eventos/[eventId]/registro` permite registrarse sin cuenta en eventos publicados,

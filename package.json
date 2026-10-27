@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test tests/registration.test.mjs tests/ticket.test.mjs tests/ticket-email.test.mjs tests/registration-email.test.mjs",
+    "test": "node --experimental-strip-types --test tests/registration.test.mjs tests/ticket.test.mjs tests/ticket-email.test.mjs tests/registration-email.test.mjs tests/public-events.test.mjs",
     "test:db": "node --test tests/registration.database.test.mjs"
   },
   "dependencies": {

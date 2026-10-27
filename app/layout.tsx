@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Encuentro Creativo 2026 | Doorlist",
-  description: "Registro para Encuentro Creativo 2026.",
+  title: "Eventos | Door List",
+  description: "Descubre eventos con registro abierto y reserva tu entrada con Door List.",
 };
 
 export default function RootLayout({
