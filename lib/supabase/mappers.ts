@@ -1,4 +1,4 @@
-import type { EventInput, Event, PublicEvent, PublicRegistrationEvent, PublicTicket, RegistrationResult } from "../domain";
+import type { DashboardEvent, EventInput, Event, PublicEvent, PublicRegistrationEvent, PublicTicket, RegistrationResult } from "../domain";
 
 type EventRow = Omit<PublicEvent, "startsAt"> & { starts_at: string };
 type OrganizerEventRow = EventRow & Pick<Event, "capacity" | "status"> & { ticket_types: Event["ticketTypes"] };
@@ -15,6 +15,24 @@ export function mapPublicEvent(row: EventRow): PublicEvent {
 }
 export function mapOrganizerEvent(row: OrganizerEventRow): Event {
   return { ...mapPublicEvent(row), capacity: row.capacity, status: row.status, ticketTypes: row.ticket_types };
+}
+type DashboardEventRow = Omit<OrganizerEventRow, "ticket_types"> & {
+  registration_count: number;
+  ticket_types: (Event["ticketTypes"][number] & { registration_count: number })[];
+  registrations: { id: string; ticket_type_id: string; name: string; email: string; created_at: string }[];
+};
+export function mapDashboardEvent(row: DashboardEventRow): DashboardEvent {
+  return {
+    ...mapOrganizerEvent(row),
+    registrationCount: row.registration_count,
+    ticketTypes: row.ticket_types.map((type) => ({
+      id: type.id, name: type.name, capacity: type.capacity, registrationCount: type.registration_count,
+    })),
+    registrations: row.registrations.map((registration) => ({
+      id: registration.id, ticketTypeId: registration.ticket_type_id,
+      name: registration.name, email: registration.email, createdAt: registration.created_at,
+    })),
+  };
 }
 export function mapRegistrationEvent(row: RegistrationEventRow): PublicRegistrationEvent {
   return { ...mapPublicEvent(row), ticketTypes: row.ticket_types };

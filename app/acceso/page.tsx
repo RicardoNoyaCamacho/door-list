@@ -22,7 +22,7 @@ export default function AccessPage() {
     const input: CredentialsInput = { email, password };
     try {
       await requestJson<ApiSuccess>(mode === "sign-in" ? "/api/acceso" : "/api/cuentas", jsonRequest(input));
-      if (mode === "sign-in") { router.push("/organizador"); router.refresh(); }
+      if (mode === "sign-in") { router.push("/dashboard"); router.refresh(); }
       else setMessage("Revisa tu correo para confirmar la cuenta y después inicia sesión.");
     } catch (error) {
       setMessage(error instanceof ApiError ? errorMessage(error.code) : errorMessage("networkError"));

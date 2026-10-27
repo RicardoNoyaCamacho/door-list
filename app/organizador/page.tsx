@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { OrganizerForm } from "./organizer-form";
+import { OrganizerForm } from "@/components/organizer-form";
 
 import { localDateTime } from "@/lib/dates.mjs";
 import { mapOrganizerEvent } from "@/lib/supabase/mappers";
@@ -21,6 +21,7 @@ export default async function OrganizerPage() {
   const { data, error } = await supabase
     .from("events")
     .select("id, title, description, starts_at, venue, capacity, status, ticket_types(id, name, capacity)")
+    .eq("owner_id", claims.claims.sub)
     .order("starts_at", { ascending: true });
   const events = (data ?? []).map(mapOrganizerEvent);
   const displayError = error ? "No pudimos consultar tus eventos. Intenta de nuevo." : null;
@@ -33,7 +34,10 @@ export default async function OrganizerPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4f5d56]">Panel de organizador</p>
             <h1 className="mt-2 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">Tus eventos</h1>
           </div>
-          <OrganizerForm endpoint="/api/sesion" method="DELETE" signOut><button className="border border-[#18231f] px-4 py-2 text-sm font-semibold">Cerrar sesión</button></OrganizerForm>
+          <div className="flex flex-wrap gap-4">
+            <Link href="/dashboard" prefetch={false} className="border border-[#18231f] px-4 py-2 text-sm font-semibold">Ver panel y asistentes</Link>
+            <OrganizerForm endpoint="/api/sesion" method="DELETE" signOut><button className="border border-[#18231f] px-4 py-2 text-sm font-semibold">Cerrar sesión</button></OrganizerForm>
+          </div>
         </header>
 
         {displayError && <p role="alert" className="mt-6 border border-[#b7452b] bg-[#ff6b4a]/15 px-4 py-3 text-sm">{displayError}</p>}

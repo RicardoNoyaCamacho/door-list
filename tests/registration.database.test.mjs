@@ -198,7 +198,8 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
     await t.test("anonymous and authenticated clients cannot access personal data or write directly", () => {
       const { event, ticket } = fixture();
       for (const role of ["anon", "authenticated"]) {
-        assert.throws(() => sql(`set role ${role}; select * from public.registrations;`), /permission denied/);
+        if (role === "anon") assert.throws(() => sql(`set role ${role}; select * from public.registrations;`), /permission denied/);
+        else assert.equal(sql("set role authenticated; select count(*) from public.registrations;"), "0");
         assert.throws(() => sql(`set role ${role}; insert into public.registrations (event_id, ticket_type_id, name, email)
           values ('${event}', '${ticket}', 'Bypass', 'bypass@example.com');`), /permission denied/);
         assert.throws(() => sql(`set role ${role}; update public.registrations set email = 'changed@example.com';`), /permission denied/);
@@ -206,6 +207,46 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
         assert.equal(JSON.parse(sql(`set role ${role}; ${rpc(event, ticket)}`)).code, "success");
       }
       assert.equal(count(event), 2);
+    });
+
+    await t.test("dashboard exposes attendees and accurate paginated totals only to the event owner", () => {
+      const { event, ticket } = fixture({ capacity: 1100 });
+      const emptyTicket = randomUUID();
+      sql(`begin;
+        update public.ticket_types set capacity = 1090 where id = '${ticket}';
+        insert into public.ticket_types (id, event_id, name, capacity) values ('${emptyTicket}', '${event}', 'VIP', 10);
+        insert into public.registrations (event_id, ticket_type_id, name, email)
+          select '${event}', '${ticket}', 'Asistente ' || n, 'attendee' || n || '@example.com'
+          from generate_series(1, 1005) n;
+        commit;`);
+      const context = (id) => `set role authenticated; set request.jwt.claim.sub = '${id}';`;
+      const dashboard = (id, offset = 0) => JSON.parse(sql(`${context(id)} select public.get_organizer_event('${event}', ${offset});`) || "null");
+      const detail = dashboard(owner);
+      assert.equal(detail.id, event);
+      assert.equal(detail.registration_count, 1005);
+      assert.equal(detail.registrations.length, 50);
+      assert.equal(detail.ticket_types.find((type) => type.id === ticket).registration_count, 1005);
+      assert.equal(detail.ticket_types.find((type) => type.id === emptyTicket).registration_count, 0);
+      assert.equal(detail.ticket_types.find((type) => type.id === emptyTicket).capacity, 10);
+      assert.equal(dashboard(owner, 1000).registrations.length, 5);
+      assert.equal(dashboard(owner, 1050).registrations.length, 0);
+      assert.equal(dashboard(owner, 1050).registration_count, 1005);
+      const secondPage = dashboard(owner, 50);
+      assert.ok(secondPage.registrations.every((r) => !detail.registrations.some((first) => first.id === r.id)));
+      assert.equal(sql(`${context(owner)} select count(*) from public.registrations where event_id = '${event}';`), "1005");
+      assert.equal(dashboard(owner2), null);
+      assert.equal(sql(`${context(owner2)} select count(*) from public.registrations where event_id = '${event}';`), "0");
+      assert.equal(sql(`set role authenticated; select public.get_organizer_event('${event}');`), "");
+      assert.throws(() => sql(`set role anon; select public.get_organizer_event('${event}');`), /permission denied/);
+      assert.equal(sql(`${context(owner)} select public.get_organizer_event('${randomUUID()}');`), "");
+      sql(`update public.events set status = 'draft' where id = '${event}';`);
+      assert.equal(dashboard(owner).registration_count, 1005);
+      assert.equal(dashboard(owner2), null);
+      const empty = fixture({ status: "draft" });
+      const emptyDetail = JSON.parse(sql(`${context(owner)} select public.get_organizer_event('${empty.event}');`));
+      assert.equal(emptyDetail.registration_count, 0);
+      assert.deepEqual(emptyDetail.registrations, []);
+      assert.equal(emptyDetail.ticket_types[0].registration_count, 0);
     });
 
     await t.test("registration issues exactly one ticket and duplicate emails never reveal its code", () => {

@@ -35,7 +35,7 @@ export default async function Home() {
             <h1 className="mt-2 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">Encuentra tu próximo evento</h1>
             <p className="mt-4 max-w-2xl text-[#4f5d56]">Descubre los eventos con registro abierto y reserva tu entrada sin crear una cuenta.</p>
           </div>
-          <Link href="/organizador" prefetch={false} className="border border-[#18231f] px-4 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-4">Acceso para organizadores</Link>
+          <Link href="/dashboard" prefetch={false} className="border border-[#18231f] px-4 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-4">Acceso para organizadores</Link>
         </header>
 
         <section aria-labelledby="events-heading" className="mt-10">

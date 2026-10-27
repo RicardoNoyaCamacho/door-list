@@ -43,3 +43,15 @@ export type EventInput = Pick<Event, "title" | "description" | "startsAt" | "ven
 export type TicketTypeInput = Pick<TicketType, "name" | "capacity">;
 export type CredentialsInput = { email: string; password: string };
 export type ApiSuccess = { success: true };
+export type Registration = {
+  id: string;
+  ticketTypeId: string;
+  name: string;
+  email: string;
+  createdAt: string;
+};
+export type DashboardEvent = Omit<Event, "ticketTypes"> & {
+  ticketTypes: (TicketType & { registrationCount: number })[];
+  registrationCount: number;
+  registrations: Registration[];
+};

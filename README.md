@@ -6,7 +6,25 @@ La ruta `/` lista eventos publicados desde el inicio del día actual en
 `America/Mexico_City`, ordenados por fecha. Se puede consultar sin sesión y cada
 evento enlaza a su registro público. Los eventos de hoy permanecen visibles
 aunque su hora haya pasado; el cupo se comprueba al registrarse. El panel privado
-continúa en `/organizador`, con acceso mediante `/acceso`.
+está en `/dashboard`, con acceso mediante `/acceso`. La gestión de eventos
+continúa en `/organizador`.
+
+## Panel del organizador
+
+`/dashboard` lista únicamente los eventos del usuario autenticado, incluidos
+borradores y eventos pasados. `/dashboard/eventos/[eventId]` muestra el total de
+registros sobre el aforo del evento, el conteo sobre el aforo de cada tipo de
+entrada y los asistentes (nombre, correo, tipo de entrada y fecha de registro).
+Los eventos y asistentes se paginan de 50 en 50; los conteos incluyen todos los
+registros, independientemente de la página o del límite de filas de PostgREST.
+
+Aplica `20261027130000_add_organizer_dashboard.sql` antes de utilizar el panel.
+La migración habilita SELECT en `registrations` para usuarios autenticados con
+una política RLS que exige ser dueño del evento. La RPC `get_organizer_event`
+usa los permisos del usuario y comprueba además la propiedad del evento.
+Otro organizador no puede consultar el detalle aunque el evento esté publicado.
+Las visitas sin sesión se redirigen a `/acceso`; los eventos ajenos o inexistentes
+muestran una página de evento no disponible. No se utiliza una clave de servicio.
 
 ## Registro público
 
@@ -19,8 +37,9 @@ Antes de desplegar la página, aplica las migraciones de `supabase/migrations` c
 flujo habitual del proyecto (`npx supabase db push` para el proyecto vinculado).
 La RPC `get_public_registration_event` expone información pública y cupos agregados;
 `register_event_attendee` valida y crea el registro en una transacción. Ambas admiten
-los roles `anon` y `authenticated`; la tabla `registrations` no permite acceso directo
-a esos roles. No se necesita una clave de servicio.
+los roles `anon` y `authenticated`; la tabla `registrations` no permite escrituras
+directas a esos roles. Su lectura está restringida al dueño del evento mediante
+RLS. No se necesita una clave de servicio.
 
 Los eventos y tipos de entrada con registros no se pueden eliminar ni reducir por
 debajo de sus plazas ocupadas. Los cambios de entrada y los registros comparten un

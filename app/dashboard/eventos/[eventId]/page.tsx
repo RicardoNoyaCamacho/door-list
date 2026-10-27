@@ -1,0 +1,69 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { connection } from "next/server";
+import { dashboardPage, getDashboardEvent } from "@/lib/dashboard";
+import { formatEventDate } from "@/lib/dates.mjs";
+import { DashboardPagination } from "@/components/dashboard-pagination";
+
+export default async function OrganizerEventDashboardPage({ params, searchParams }: {
+  params: Promise<{ eventId: string }>;
+  searchParams: Promise<{ pagina?: string | string[] }>;
+}) {
+  await connection();
+  const { eventId } = await params;
+  const page = dashboardPage((await searchParams).pagina);
+  const event = await getDashboardEvent(eventId, page);
+  if (!event) notFound();
+  const ticketTypeNames = new Map(event.ticketTypes.map((type) => [type.id, type.name]));
+  return (
+    <>
+      <Link href="/dashboard" prefetch={false} className="mt-8 inline-block text-sm font-semibold underline">Volver a tus eventos</Link>
+      <header className="mt-6">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[#4f5d56]">{event.status === "published" ? "Publicado" : "Borrador"}</p>
+        <h1 className="mt-3 break-words text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">{event.title}</h1>
+        <p className="mt-4"><time dateTime={event.startsAt}>{formatEventDate(event.startsAt)}</time> · Hora de Ciudad de México</p>
+        <p className="mt-2 break-words text-[#4f5d56]">{event.venue}</p>
+        <p className="mt-6 text-xl font-semibold">{event.registrationCount} / {event.capacity} registros sobre el aforo total</p>
+      </header>
+      <section aria-labelledby="ticket-types-heading" className="mt-10">
+        <h2 id="ticket-types-heading" className="text-2xl font-semibold">Tipos de entrada</h2>
+        {event.ticketTypes.length === 0 ? <p className="mt-4 text-[#4f5d56]">Aún no hay tipos de entrada para este evento.</p> : (
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {event.ticketTypes.map((type) => (
+              <article key={type.id} className="min-w-0 border border-[#18231f]/15 bg-white/65 p-5">
+                <h3 className="break-words text-lg font-semibold">{type.name}</h3>
+                <p className="mt-3"><strong>{type.registrationCount} / {type.capacity}</strong> registros</p>
+                <progress aria-label={`Aforo de ${type.name}`} value={type.registrationCount} max={type.capacity} className="mt-3 h-2 w-full accent-[#18231f]" />
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+      <section aria-labelledby="attendees-heading" className="mt-10">
+        <h2 id="attendees-heading" className="text-2xl font-semibold">Asistentes registrados ({event.registrationCount})</h2>
+        {event.registrations.length === 0 ? (
+          <p role="status" className="mt-5 border border-[#18231f]/15 bg-white/65 p-6 text-[#4f5d56]">{event.registrationCount === 0 ? "Todavía no hay asistentes registrados." : "No hay asistentes en esta página. Usa la paginación para volver."}</p>
+        ) : (
+          <div className="mt-5 overflow-x-auto border border-[#18231f]/15 bg-white/65">
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">Lista de asistentes, tipo de entrada y fecha de registro en hora de Ciudad de México</caption>
+              <thead className="border-b border-[#18231f]/15"><tr>
+                <th scope="col" className="px-5 py-4">Nombre</th><th scope="col" className="px-5 py-4">Correo electrónico</th>
+                <th scope="col" className="px-5 py-4">Tipo de entrada</th><th scope="col" className="px-5 py-4">Fecha de registro</th>
+              </tr></thead>
+              <tbody>{event.registrations.map((registration) => (
+                <tr key={registration.id} className="border-b border-[#18231f]/10 last:border-0">
+                  <td className="max-w-xs break-words px-5 py-4">{registration.name}</td>
+                  <td className="max-w-xs break-words px-5 py-4">{registration.email}</td>
+                  <td className="max-w-xs break-words px-5 py-4">{ticketTypeNames.get(registration.ticketTypeId)}</td>
+                  <td className="px-5 py-4"><time dateTime={registration.createdAt}>{formatEventDate(registration.createdAt)}</time></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+        <DashboardPagination pathname={`/dashboard/eventos/${event.id}`} page={page} total={event.registrationCount} />
+      </section>
+    </>
+  );
+}
