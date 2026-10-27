@@ -35,3 +35,12 @@ Muestra mensajes controlados por la aplicación en la UI; nunca muestres mensaje
 
 Registra todo cambio de esquema en un archivo de migración versionado; no uses SQL suelto.
 Habilita RLS en toda tabla expuesta.
+
+## Estilo de UI
+
+Al crear o modificar UI de este proyecto, aplica la skill local
+`door-list-ui` en `.agents/skills/door-list-ui/SKILL.md`.
+Sus recetas fijan paleta, tipografía, espaciado, componentes y estados de
+tablas vacías, carga y error. Consulta sus ejemplos cuando trabajes con tablas.
+Los cambios exclusivamente de API, persistencia o lógica sin UI no requieren
+aplicarla ni autorizan un rediseño.
