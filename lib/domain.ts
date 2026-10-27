@@ -30,10 +30,16 @@ export type RegistrationConfirmation = {
 export type RegistrationState = {
   status: "idle" | "error" | "success";
   message?: string;
-  fieldErrors?: Partial<Record<"name" | "email" | "ticket_type_id", string>>;
+  fieldErrors?: Partial<Record<"name" | "email" | "ticketTypeId", string>>;
   availability?: PublicRegistrationEvent | null;
   confirmation?: RegistrationConfirmation;
 };
 export type RegistrationResult =
   | { code: "success"; eventTitle: string; ticketTypeName: string; ticketCode: string }
   | { code: "duplicate" | "eventUnavailable" | "ticketUnavailable" | "invalidInput" };
+export type RegistrationInput = { name: string; email: string; ticketTypeId: string };
+// Event writes accept CDMX datetime-local; event reads expose ISO instants.
+export type EventInput = Pick<Event, "title" | "description" | "startsAt" | "venue" | "capacity" | "status">;
+export type TicketTypeInput = Pick<TicketType, "name" | "capacity">;
+export type CredentialsInput = { email: string; password: string };
+export type ApiSuccess = { success: true };

@@ -2,9 +2,11 @@
 
 import { useActionState, useState } from "react";
 import Link from "next/link";
-import { type PublicRegistrationEvent, type RegistrationState } from "@/lib/registration";
+import { type PublicRegistrationEvent, type RegistrationState, validateRegistration } from "@/lib/registration";
 import { ticketPath } from "@/lib/ticket";
-import { registerAttendee } from "./actions";
+import { jsonRequest, requestJson } from "@/lib/api-client";
+import { ApiError, errorMessage } from "@/lib/api-errors";
+import type { RegistrationInput, RegistrationConfirmation } from "@/lib/domain";
 
 const field = "mt-1 w-full border border-[#18231f]/20 bg-white px-3 py-3 text-base outline-none focus:border-[#18231f] disabled:opacity-60";
 
@@ -14,15 +16,40 @@ export function RegistrationForm({ event }: { event: PublicRegistrationEvent }) 
   const [ticketTypeId, setTicketTypeId] = useState("");
   const [state, formAction, pending] = useActionState<RegistrationState, FormData>(
     async (previous, formData) => {
+      const input: RegistrationInput = {
+        name: String(formData.get("name") ?? ""), email: String(formData.get("email") ?? ""),
+        ticketTypeId: String(formData.get("ticketTypeId") ?? ""),
+      };
+      const { fieldErrors } = validateRegistration(input);
+      if (Object.keys(fieldErrors).length) {
+        return { status: "error", message: errorMessage("invalidInput"), fieldErrors, availability: previous.availability };
+      }
       try {
-        const next = await registerAttendee(event.id, previous, formData);
-        // Preserve refreshed options across validation errors and retries.
-        return { ...next, availability: next.availability === undefined ? previous.availability : next.availability };
-      } catch {
+        const confirmation = await requestJson<RegistrationConfirmation>(
+          `/api/eventos/${event.id}/registros`, jsonRequest(input),
+        );
+        return { status: "success", confirmation };
+      } catch (error) {
+        if (error instanceof ApiError && error.code === "eventUnavailable") {
+          return { status: "error", message: errorMessage(error.code), availability: null };
+        }
+        if (error instanceof ApiError && error.code === "ticketUnavailable") {
+          try {
+            const availability = await requestJson<PublicRegistrationEvent>(`/api/eventos/${event.id}/disponibilidad`);
+            return { status: "error", message: errorMessage(error.code), availability };
+          } catch (refreshError) {
+            if (refreshError instanceof ApiError && refreshError.code === "eventUnavailable") {
+              return { status: "error", message: errorMessage(refreshError.code), availability: null };
+            }
+            return {
+              status: "error", availability: previous.availability,
+              message: "Esta entrada ya no está disponible. No pudimos actualizar las opciones; recarga la página para consultar el cupo actual.",
+            };
+          }
+        }
         return {
-          status: "error",
-          message: "No pudimos confirmar tu registro. Revisa tu conexión e intenta de nuevo; no se creará un duplicado.",
-          availability: previous.availability,
+          status: "error", availability: previous.availability,
+          message: error instanceof ApiError ? errorMessage(error.code) : "No pudimos confirmar tu registro. Revisa tu conexión e intenta de nuevo; no se creará un duplicado.",
         };
       }
     },
@@ -50,9 +77,9 @@ export function RegistrationForm({ event }: { event: PublicRegistrationEvent }) 
     return <p role="alert" className="mt-8 border border-[#b7452b] p-4">Este evento ya no está disponible para registro.</p>;
   }
 
-  const tickets = (state.availability ?? event).ticketTypes;
-  const hasAvailability = tickets.some((ticket) => ticket.remaining > 0);
-  const selectedTicket = tickets.some((ticket) => ticket.id === ticketTypeId && ticket.remaining > 0) ? ticketTypeId : "";
+  const ticketTypes = (state.availability ?? event).ticketTypes;
+  const hasAvailability = ticketTypes.some((ticketType) => ticketType.remaining > 0);
+  const selectedTicketTypeId = ticketTypes.some((ticketType) => ticketType.id === ticketTypeId && ticketType.remaining > 0) ? ticketTypeId : "";
 
   return (
     <form action={formAction} aria-busy={pending} className="mt-8">
@@ -62,12 +89,12 @@ export function RegistrationForm({ event }: { event: PublicRegistrationEvent }) 
       {!hasAvailability && <p role="status" className="mt-5 border border-[#18231f]/20 p-4">No hay entradas disponibles.</p>}
       <fieldset disabled={pending || !hasAvailability} className="mt-6 space-y-5 disabled:opacity-70">
         <label className="block text-sm font-medium" htmlFor="ticket-type">Tipo de entrada
-          <select id="ticket-type" name="ticket_type_id" required value={selectedTicket} onChange={(e) => setTicketTypeId(e.target.value)} className={field} aria-invalid={!!state.fieldErrors?.ticket_type_id} aria-describedby={state.fieldErrors?.ticket_type_id ? "ticket-error" : undefined}>
+          <select id="ticket-type" name="ticketTypeId" required value={selectedTicketTypeId} onChange={(e) => setTicketTypeId(e.target.value)} className={field} aria-invalid={!!state.fieldErrors?.ticketTypeId} aria-describedby={state.fieldErrors?.ticketTypeId ? "ticket-error" : undefined}>
             <option value="">Selecciona una entrada</option>
-            {tickets.map((ticket) => <option key={ticket.id} value={ticket.id} disabled={ticket.remaining <= 0}>{ticket.name} · {ticket.remaining > 0 ? `${ticket.remaining} disponibles` : "Agotada"}</option>)}
+            {ticketTypes.map((ticketType) => <option key={ticketType.id} value={ticketType.id} disabled={ticketType.remaining <= 0}>{ticketType.name} · {ticketType.remaining > 0 ? `${ticketType.remaining} disponibles` : "Agotada"}</option>)}
           </select>
         </label>
-        {state.fieldErrors?.ticket_type_id && <p id="ticket-error" className="text-sm text-[#b7452b]">{state.fieldErrors.ticket_type_id}</p>}
+        {state.fieldErrors?.ticketTypeId && <p id="ticket-error" className="text-sm text-[#b7452b]">{state.fieldErrors.ticketTypeId}</p>}
         <label className="block text-sm font-medium" htmlFor="attendee-name">Nombre
           <input id="attendee-name" name="name" autoComplete="name" required maxLength={200} value={name} onChange={(e) => setName(e.target.value)} className={field} aria-invalid={!!state.fieldErrors?.name} aria-describedby={state.fieldErrors?.name ? "name-error" : undefined} />
         </label>

@@ -3,6 +3,8 @@ import { updateSession } from "@/lib/supabase/proxy";
 import { privateTicketHeaders } from "@/lib/ticket";
 
 export async function proxy(request: NextRequest) {
+  // API handlers refresh cookies and normalize failures inside their boundary.
+  if (request.nextUrl.pathname.startsWith("/api/")) return NextResponse.next({ request });
   if (request.nextUrl.pathname === "/entradas" || request.nextUrl.pathname.startsWith("/entradas/")) {
     const response = NextResponse.next({ request });
     for (const [name, value] of Object.entries(privateTicketHeaders)) response.headers.set(name, value);

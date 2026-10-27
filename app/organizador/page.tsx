@@ -2,15 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import {
-  createEvent,
-  createTicketType,
-  deleteEvent,
-  deleteTicketType,
-  signOut,
-  updateEvent,
-  updateTicketType,
-} from "./actions";
+import { OrganizerForm } from "./organizer-form";
 
 import { localDateTime } from "@/lib/dates.mjs";
 import { mapOrganizerEvent } from "@/lib/supabase/mappers";
@@ -20,7 +12,7 @@ export const instant = false;
 
 const field = "mt-1 w-full border border-[#18231f]/20 bg-white px-3 py-2 text-sm outline-none focus:border-[#18231f]";
 
-export default async function OrganizerPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function OrganizerPage() {
   await connection();
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
@@ -31,8 +23,7 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
     .select("id, title, description, starts_at, venue, capacity, status, ticket_types(id, name, capacity)")
     .order("starts_at", { ascending: true });
   const events = (data ?? []).map(mapOrganizerEvent);
-  const { error: queryError } = await searchParams;
-  const displayError = queryError ?? error?.message;
+  const displayError = error ? "No pudimos consultar tus eventos. Intenta de nuevo." : null;
 
   return (
     <main className="min-h-screen bg-[#f5f0e8] px-5 py-10 text-[#18231f] sm:px-10">
@@ -42,7 +33,7 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4f5d56]">Panel de organizador</p>
             <h1 className="mt-2 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">Tus eventos</h1>
           </div>
-          <form action={signOut}><button className="border border-[#18231f] px-4 py-2 text-sm font-semibold">Cerrar sesión</button></form>
+          <OrganizerForm endpoint="/api/sesion" method="DELETE" signOut><button className="border border-[#18231f] px-4 py-2 text-sm font-semibold">Cerrar sesión</button></OrganizerForm>
         </header>
 
         {displayError && <p role="alert" className="mt-6 border border-[#b7452b] bg-[#ff6b4a]/15 px-4 py-3 text-sm">{displayError}</p>}
@@ -50,26 +41,26 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
         <section className="mt-10 border border-[#18231f]/15 bg-white/65 p-6">
           <h2 className="text-2xl font-semibold">Crear evento</h2>
           <p className="mt-1 text-sm text-[#4f5d56]">Los eventos se crean como borrador; podrás publicarlos después de añadir una entrada.</p>
-          <form action={createEvent} className="mt-6 grid gap-4 md:grid-cols-2">
+          <OrganizerForm endpoint="/api/eventos" className="mt-6 grid gap-4 md:grid-cols-2">
             <label className="text-sm font-medium">Nombre<input name="title" required className={field} /></label>
             <label className="text-sm font-medium">Lugar<input name="venue" required className={field} /></label>
-            <label className="text-sm font-medium">Fecha y hora<input name="starts_at" type="datetime-local" required className={field} /></label>
+            <label className="text-sm font-medium">Fecha y hora<input name="startsAt" type="datetime-local" required className={field} /></label>
             <label className="text-sm font-medium">Aforo total<input name="capacity" type="number" min="1" required className={field} /></label>
             <label className="text-sm font-medium md:col-span-2">Descripción<textarea name="description" rows={3} className={field} /></label>
             <button className="w-fit bg-[#18231f] px-5 py-3 text-sm font-semibold text-white">Crear borrador</button>
-          </form>
+          </OrganizerForm>
         </section>
 
         {events.length > 0 && (
           <section className="mt-6 border border-[#18231f]/15 bg-white/65 p-6">
             <h2 className="text-2xl font-semibold">Crear tipo de entrada</h2>
             <p className="mt-1 text-sm text-[#4f5d56]">Selecciona uno de tus eventos registrados para asignarle la entrada.</p>
-            <form action={createTicketType} className="mt-6 flex flex-wrap items-end gap-4">
-              <label className="text-sm font-medium">Evento<select name="event_id" required className={`${field} min-w-56`}><option value="">Selecciona un evento</option>{events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}</select></label>
+            <OrganizerForm endpoint="/api/eventos/:eventId/tipos-de-entrada" className="mt-6 flex flex-wrap items-end gap-4">
+              <label className="text-sm font-medium">Evento<select name="eventId" required className={`${field} min-w-56`}><option value="">Selecciona un evento</option>{events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}</select></label>
               <label className="text-sm font-medium">Nombre<input name="name" placeholder="Ej. General" required className={`${field} w-48`} /></label>
               <label className="text-sm font-medium">Aforo<input name="capacity" type="number" min="1" required className={`${field} w-28`} /></label>
               <button className="border border-[#18231f] px-4 py-2 text-sm font-semibold">Añadir entrada</button>
-            </form>
+            </OrganizerForm>
           </section>
         )}
 
@@ -86,30 +77,30 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
                 {event.status === "published" && (
                   <Link href={`/eventos/${event.id}/registro`} prefetch={false} className="mt-4 inline-block text-sm font-semibold underline">Abrir página pública de registro</Link>
                 )}
-                <form action={updateEvent} className="mt-5 grid gap-4 md:grid-cols-2">
-                  <input type="hidden" name="event_id" value={event.id} />
+                <OrganizerForm endpoint={`/api/eventos/${event.id}`} method="PATCH" className="mt-5 grid gap-4 md:grid-cols-2">
+                  <input type="hidden" name="eventId" value={event.id} />
                   <label className="text-sm font-medium">Nombre<input name="title" defaultValue={event.title} required className={field} /></label>
                   <label className="text-sm font-medium">Lugar<input name="venue" defaultValue={event.venue} required className={field} /></label>
-                  <label className="text-sm font-medium">Fecha y hora<input name="starts_at" type="datetime-local" defaultValue={localDateTime(event.startsAt)} required className={field} /></label>
+                  <label className="text-sm font-medium">Fecha y hora<input name="startsAt" type="datetime-local" defaultValue={localDateTime(event.startsAt)} required className={field} /></label>
                   <label className="text-sm font-medium">Aforo total<input name="capacity" type="number" min="1" defaultValue={event.capacity} required className={field} /></label>
                   <label className="text-sm font-medium">Estado<select name="status" defaultValue={event.status} className={field}><option value="draft">Borrador</option><option value="published">Publicado</option></select></label>
                   <label className="text-sm font-medium md:col-span-2">Descripción<textarea name="description" rows={3} defaultValue={event.description} className={field} /></label>
                   <button className="w-fit bg-[#18231f] px-5 py-3 text-sm font-semibold text-white">Guardar evento</button>
-                </form>
-                <form action={deleteEvent} className="mt-3"><input type="hidden" name="event_id" value={event.id} /><button className="text-sm font-semibold text-[#b7452b]">Eliminar evento</button></form>
+                </OrganizerForm>
+                <OrganizerForm endpoint={`/api/eventos/${event.id}`} method="DELETE" className="mt-3"><input type="hidden" name="eventId" value={event.id} /><button className="text-sm font-semibold text-[#b7452b]">Eliminar evento</button></OrganizerForm>
 
                 <div className="mt-8 border-t border-[#18231f]/15 pt-6">
                   <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-xl font-semibold">Tipos de entrada</h3><p className="text-sm text-[#4f5d56]">Aforo asignado: {assigned} / {event.capacity}</p></div>
                   <div className="mt-4 space-y-3">
                     {event.ticketTypes.map((ticketType) => (
                       <div key={ticketType.id} className="flex flex-wrap items-end gap-3 border border-[#18231f]/10 p-3">
-                        <form action={updateTicketType} className="flex flex-wrap items-end gap-3">
-                          <input type="hidden" name="ticket_type_id" value={ticketType.id} /><input type="hidden" name="event_id" value={event.id} />
+                        <OrganizerForm endpoint={`/api/eventos/${event.id}/tipos-de-entrada/${ticketType.id}`} method="PATCH" className="flex flex-wrap items-end gap-3">
+                          <input type="hidden" name="ticketTypeId" value={ticketType.id} /><input type="hidden" name="eventId" value={event.id} />
                           <label className="text-xs font-medium">Nombre<input name="name" defaultValue={ticketType.name} required className={`${field} w-44`} /></label>
                           <label className="text-xs font-medium">Aforo<input name="capacity" type="number" min="1" defaultValue={ticketType.capacity} required className={`${field} w-24`} /></label>
                           <button className="border border-[#18231f] px-3 py-2 text-sm font-semibold">Guardar</button>
-                        </form>
-                        <form action={deleteTicketType}><input type="hidden" name="ticket_type_id" value={ticketType.id} /><button className="pb-2 text-sm font-semibold text-[#b7452b]">Eliminar</button></form>
+                        </OrganizerForm>
+                        <OrganizerForm endpoint={`/api/eventos/${event.id}/tipos-de-entrada/${ticketType.id}`} method="DELETE"><input type="hidden" name="ticketTypeId" value={ticketType.id} /><button className="pb-2 text-sm font-semibold text-[#b7452b]">Eliminar</button></OrganizerForm>
                       </div>
                     ))}
                   </div>

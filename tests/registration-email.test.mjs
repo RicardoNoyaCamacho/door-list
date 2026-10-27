@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import test from "node:test";
 
-// Exercise the actual Server Action with isolated database/HTTP boundaries.
+// Exercise the actual registration service with isolated database/HTTP boundaries.
 // No .env files, live Supabase, Resend calls or attendee emails are used.
 const hooks = registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -15,7 +15,7 @@ const hooks = registerHooks({
     return nextResolve(specifier, context);
   },
 });
-const { registerAttendee } = await import("../app/eventos/[eventId]/registro/actions.ts");
+const { registerAttendee } = await import("../lib/registration-service.ts");
 hooks.deregister();
 
 const eventId = "11111111-1111-4111-8111-111111111111";
@@ -50,11 +50,8 @@ function setup(t, registration, ticketResult = { data: ticket, error: null }) {
     else process.env.RESEND_FROM_EMAIL = originalFrom;
     delete globalThis.ticketEmailTestClient;
   });
-  const form = new FormData();
-  form.set("name", "Nombre enviado");
-  form.set("email", "enviado@example.com");
-  form.set("ticket_type_id", ticketId);
-  return { calls, logger, submit: () => registerAttendee(eventId, { status: "idle" }, form) };
+  const input = { name: "Nombre enviado", email: "enviado@example.com", ticketTypeId: ticketId };
+  return { calls, logger, submit: () => registerAttendee(eventId, input) };
 }
 const success = { data: { code: "success", event_title: "Evento guardado", ticket_type_name: "General", ticket_code: code }, error: null };
 
@@ -72,9 +69,8 @@ test("confirmation sends only after registration commits, to the database email"
     return Response.json({ id: "accepted" });
   });
   const result = await submit();
-  assert.equal(result.status, "success");
-  assert.equal(result.confirmation.ticketCode, code);
-  assert.equal(result.confirmation.emailStatus, "sent");
+  assert.equal(result.ticketCode, code);
+  assert.equal(result.emailStatus, "sent");
   assert.equal(sends, 1);
 });
 
@@ -82,9 +78,8 @@ test("Resend rejection preserves the confirmed registration and ticket link", as
   const { calls, logger, submit } = setup(t, success);
   t.mock.method(globalThis, "fetch", async () => new Response("private error", { status: 403 }));
   const result = await submit();
-  assert.equal(result.status, "success");
-  assert.equal(result.confirmation.ticketCode, code);
-  assert.equal(result.confirmation.emailStatus, "failed");
+  assert.equal(result.ticketCode, code);
+  assert.equal(result.emailStatus, "failed");
   assert.equal(calls.filter((call) => call.name === "register_event_attendee").length, 1);
   assert.deepEqual(logger.mock.calls[0].arguments, ["No se pudo enviar el email de confirmación de entrada."]);
 });
@@ -93,9 +88,8 @@ test("failure to retrieve email details does not lose the issued ticket", async 
   const { submit } = setup(t, success, { data: null, error: { message: "database unavailable" } });
   t.mock.method(globalThis, "fetch", () => assert.fail("must not send"));
   const result = await submit();
-  assert.equal(result.status, "success");
-  assert.equal(result.confirmation.ticketCode, code);
-  assert.equal(result.confirmation.emailStatus, "failed");
+  assert.equal(result.ticketCode, code);
+  assert.equal(result.emailStatus, "failed");
 });
 
 test("duplicate and unavailable registrations never retrieve or email an existing ticket", async (t) => {
@@ -103,9 +97,8 @@ test("duplicate and unavailable registrations never retrieve or email an existin
     await t.test(resultCode, async (t) => {
       const { calls, submit } = setup(t, { data: { code: resultCode }, error: null });
       t.mock.method(globalThis, "fetch", () => assert.fail("must not send"));
-      const result = await submit();
-      assert.equal(result.status, "error");
-      assert.equal(result.confirmation, undefined);
+      const expected = { duplicate: "duplicateRegistration", event_unavailable: "eventUnavailable", invalid_input: "invalidInput" };
+      await assert.rejects(submit, { code: expected[resultCode] });
       assert.deepEqual(calls.map((call) => call.name), ["register_event_attendee"]);
     });
   }

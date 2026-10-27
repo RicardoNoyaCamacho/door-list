@@ -1,4 +1,4 @@
-import type { Event, PublicEvent, PublicRegistrationEvent, PublicTicket, RegistrationResult } from "../domain";
+import type { EventInput, Event, PublicEvent, PublicRegistrationEvent, PublicTicket, RegistrationResult } from "../domain";
 
 type EventRow = Omit<PublicEvent, "startsAt"> & { starts_at: string };
 type OrganizerEventRow = EventRow & Pick<Event, "capacity" | "status"> & { ticket_types: Event["ticketTypes"] };
@@ -35,7 +35,7 @@ export function mapRegistrationResult(row: RegistrationRow): RegistrationResult 
   if (!code) throw new Error("Unexpected registration result");
   return { code };
 }
-export function eventWrite(input: { title: string; venue: string; capacity: number; startsAt: string; description: string; status: string }, ownerId?: string) {
+export function eventWrite(input: EventInput, ownerId?: string) {
   return {
     title: input.title, venue: input.venue, capacity: input.capacity, starts_at: input.startsAt,
     description: input.description, status: input.status, ...(ownerId ? { owner_id: ownerId } : {}),

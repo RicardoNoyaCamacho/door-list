@@ -2,7 +2,9 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { jsonRequest, requestJson } from "@/lib/api-client";
+import { ApiError, errorMessage } from "@/lib/api-errors";
+import type { ApiSuccess, CredentialsInput } from "@/lib/domain";
 
 export default function AccessPage() {
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
@@ -17,15 +19,14 @@ export default function AccessPage() {
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email"));
     const password = String(form.get("password"));
-    const supabase = createClient();
-    const result = mode === "sign-in"
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password });
-
-    setPending(false);
-    if (result.error) return setMessage(result.error.message);
-    if (mode === "sign-in") router.push("/organizador");
-    else setMessage("Revisa tu correo para confirmar la cuenta y después inicia sesión.");
+    const input: CredentialsInput = { email, password };
+    try {
+      await requestJson<ApiSuccess>(mode === "sign-in" ? "/api/acceso" : "/api/cuentas", jsonRequest(input));
+      if (mode === "sign-in") { router.push("/organizador"); router.refresh(); }
+      else setMessage("Revisa tu correo para confirmar la cuenta y después inicia sesión.");
+    } catch (error) {
+      setMessage(error instanceof ApiError ? errorMessage(error.code) : errorMessage("networkError"));
+    } finally { setPending(false); }
   }
 
   return (
