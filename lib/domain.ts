@@ -55,3 +55,8 @@ export type DashboardEvent = Omit<Event, "ticketTypes"> & {
   registrationCount: number;
   registrations: Registration[];
 };
+export type DailyRegistrations = {
+  publishedAt: string | null;
+  publishedAtEstimated: boolean;
+  days: { date: string; registrationCount: number }[];
+};
