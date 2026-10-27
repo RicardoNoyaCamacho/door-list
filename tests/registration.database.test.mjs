@@ -76,6 +76,9 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
     const existing = fixture({ capacity: 20 });
     sql(`update public.event set capacity = 99 where id = '${existing.event}';`);
     for (const file of files.slice(1)) {
+      if (file.endsWith("_add_daily_registration_analytics.sql")) {
+        sql(`update public.registrations set created_at = ((${today} - 2) + time '23:30') at time zone 'America/Mexico_City' where event_id = '${existing.event}';`);
+      }
       if (file.endsWith("_issue_registration_tickets.sql")) {
         assert.equal(register(existing.event, existing.ticket, "legacy@example.com").code, "success");
       }
@@ -83,6 +86,30 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
       if (file.endsWith("_rename_event_to_events.sql")) eventTable = "events";
     }
     assert.equal(Number(sql(`select capacity from public.events where id = '${existing.event}';`)), 99);
+
+    await t.test("daily analytics fills zero days, uses CDMX dates, and marks historical estimates", () => {
+      const context = `set role authenticated; set request.jwt.claim.sub = '${owner}';`;
+      const series = JSON.parse(sql(`${context} select public.get_event_daily_registrations('${existing.event}');`));
+      assert.equal(series.published_at_estimated, true);
+      assert.equal(series.days.length, 3);
+      assert.deepEqual(series.days.map((day) => day.registration_count), [1, 0, 0]);
+      assert.equal(series.days[0].date, sql(`select ${today} - 2;`));
+      assert.equal(series.days[2].date, sql(`select ${today};`));
+      assert.equal(sql(`set role authenticated; set request.jwt.claim.sub = '${owner2}'; select public.get_event_daily_registrations('${existing.event}') is null;`), "t");
+      assert.throws(() => sql(`set role anon; select public.get_event_daily_registrations('${existing.event}');`), /permission denied/);
+      const draft = fixture({ status: "draft" });
+      const read = () => JSON.parse(sql(`${context} select public.get_event_daily_registrations('${draft.event}');`));
+      assert.equal(read().published_at, null);
+      assert.deepEqual(read().days, []);
+      sql(`update public.events set status = 'published' where id = '${draft.event}';`);
+      const firstPublication = read().published_at;
+      assert.ok(firstPublication);
+      assert.equal(read().published_at_estimated, false);
+      assert.deepEqual(read().days.map((day) => day.registration_count), [0]);
+      sql(`update public.events set status = 'draft' where id = '${draft.event}';
+        update public.events set status = 'published', published_at = '2000-01-01' where id = '${draft.event}';`);
+      assert.equal(read().published_at, firstPublication);
+    });
 
     await t.test("backfills one valid, unpredictable ticket for each existing registration", () => {
       assert.equal(count(existing.event), 1);
@@ -224,6 +251,8 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
       const detail = dashboard(owner);
       assert.equal(detail.id, event);
       assert.equal(detail.registration_count, 1005);
+      const daily = JSON.parse(sql(`${context(owner)} select public.get_event_daily_registrations('${event}');`));
+      assert.equal(daily.days.reduce((sum, day) => sum + day.registration_count, 0), 1005);
       assert.equal(detail.registrations.length, 50);
       assert.equal(detail.ticket_types.find((type) => type.id === ticket).registration_count, 1005);
       assert.equal(detail.ticket_types.find((type) => type.id === emptyTicket).registration_count, 0);
