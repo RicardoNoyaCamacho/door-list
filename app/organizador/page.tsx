@@ -12,24 +12,11 @@ import {
   updateTicketType,
 } from "./actions";
 
+import { localDateTime } from "@/lib/dates.mjs";
+import { mapOrganizerEvent } from "@/lib/supabase/mappers";
+
 // This authenticated dashboard depends on request cookies and live event data.
 export const instant = false;
-
-type TicketType = { id: string; name: string; capacity: number };
-type Event = {
-  id: string;
-  title: string;
-  description: string;
-  starts_at: string;
-  venue: string;
-  capacity: number;
-  status: "draft" | "published";
-  ticket_types: TicketType[];
-};
-
-function localDateTime(value: string) {
-  return new Date(value).toISOString().slice(0, 16);
-}
 
 const field = "mt-1 w-full border border-[#18231f]/20 bg-white px-3 py-2 text-sm outline-none focus:border-[#18231f]";
 
@@ -43,7 +30,7 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
     .from("events")
     .select("id, title, description, starts_at, venue, capacity, status, ticket_types(id, name, capacity)")
     .order("starts_at", { ascending: true });
-  const events = (data ?? []) as Event[];
+  const events = (data ?? []).map(mapOrganizerEvent);
   const { error: queryError } = await searchParams;
   const displayError = queryError ?? error?.message;
 
@@ -89,7 +76,7 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
         <section className="mt-10 space-y-8">
           {events.length === 0 && <p className="text-[#4f5d56]">Aún no tienes eventos.</p>}
           {events.map((event) => {
-            const assigned = event.ticket_types.reduce((total, ticketType) => total + ticketType.capacity, 0);
+            const assigned = event.ticketTypes.reduce((total, ticketType) => total + ticketType.capacity, 0);
             return (
               <article key={event.id} className="border border-[#18231f]/15 bg-white/65 p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -103,7 +90,7 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
                   <input type="hidden" name="event_id" value={event.id} />
                   <label className="text-sm font-medium">Nombre<input name="title" defaultValue={event.title} required className={field} /></label>
                   <label className="text-sm font-medium">Lugar<input name="venue" defaultValue={event.venue} required className={field} /></label>
-                  <label className="text-sm font-medium">Fecha y hora<input name="starts_at" type="datetime-local" defaultValue={localDateTime(event.starts_at)} required className={field} /></label>
+                  <label className="text-sm font-medium">Fecha y hora<input name="starts_at" type="datetime-local" defaultValue={localDateTime(event.startsAt)} required className={field} /></label>
                   <label className="text-sm font-medium">Aforo total<input name="capacity" type="number" min="1" defaultValue={event.capacity} required className={field} /></label>
                   <label className="text-sm font-medium">Estado<select name="status" defaultValue={event.status} className={field}><option value="draft">Borrador</option><option value="published">Publicado</option></select></label>
                   <label className="text-sm font-medium md:col-span-2">Descripción<textarea name="description" rows={3} defaultValue={event.description} className={field} /></label>
@@ -114,7 +101,7 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
                 <div className="mt-8 border-t border-[#18231f]/15 pt-6">
                   <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-xl font-semibold">Tipos de entrada</h3><p className="text-sm text-[#4f5d56]">Aforo asignado: {assigned} / {event.capacity}</p></div>
                   <div className="mt-4 space-y-3">
-                    {event.ticket_types.map((ticketType) => (
+                    {event.ticketTypes.map((ticketType) => (
                       <div key={ticketType.id} className="flex flex-wrap items-end gap-3 border border-[#18231f]/10 p-3">
                         <form action={updateTicketType} className="flex flex-wrap items-end gap-3">
                           <input type="hidden" name="ticket_type_id" value={ticketType.id} /><input type="hidden" name="event_id" value={event.id} />

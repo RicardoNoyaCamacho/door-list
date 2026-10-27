@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { formatEmailDate } from "./dates.mjs";
 import QRCode from "qrcode";
 import type { PublicTicket } from "./ticket";
 
@@ -18,9 +19,7 @@ export async function sendTicketEmail(
     throw new Error("Ticket email configuration is missing");
   }
 
-  const date = new Intl.DateTimeFormat("es-MX", {
-    dateStyle: "full", timeStyle: "short", timeZone: "America/Mexico_City", hourCycle: "h23",
-  }).format(new Date(ticket.event.starts_at));
+  const date = formatEmailDate(ticket.event.startsAt);
   const dateLabel = `${date} (hora de Ciudad de México)`;
   // Email clients support inline PNG attachments more widely than SVG/data URIs.
   const qr = await QRCode.toBuffer(ticket.code, {
@@ -41,14 +40,14 @@ export async function sendTicketEmail(
 <h2 style="font-size:22px">${e(ticket.event.title)}</h2>
 <p><strong>Fecha:</strong> ${e(dateLabel)}</p>
 <p><strong>Lugar:</strong> ${e(ticket.event.venue)}</p>
-<p><strong>Tipo de entrada:</strong> ${e(ticket.ticket_type.name)}</p>
+<p><strong>Tipo de entrada:</strong> ${e(ticket.ticketType.name)}</p>
 <p><strong>Asistente:</strong> ${e(ticket.attendee.name)}</p>
 <p>Presenta este QR al llegar al evento:</p>
 <p style="text-align:center"><img src="cid:ticket-qr" alt="Código QR de tu entrada" width="280" height="280" style="display:block;width:280px;max-width:100%;height:auto;margin:0 auto"></p>
 <p style="font-size:12px;word-break:break-all">Código: ${e(ticket.code)}</p>
 <p style="font-size:13px">Guarda este correo y mantén tu entrada privada. El QR identifica tu entrada.</p>
 </td></tr></table></td></tr></table></body></html>`,
-    text: `¡Tu registro está confirmado!\nHola, ${ticket.attendee.name}.\n\nEvento: ${ticket.event.title}\nFecha: ${dateLabel}\nLugar: ${ticket.event.venue}\nTipo de entrada: ${ticket.ticket_type.name}\nAsistente: ${ticket.attendee.name}\n\nPresenta el QR incluido en este correo al llegar al evento.\nCódigo: ${ticket.code}\n\nGuarda este correo y mantén tu entrada privada.`,
+    text: `¡Tu registro está confirmado!\nHola, ${ticket.attendee.name}.\n\nEvento: ${ticket.event.title}\nFecha: ${dateLabel}\nLugar: ${ticket.event.venue}\nTipo de entrada: ${ticket.ticketType.name}\nAsistente: ${ticket.attendee.name}\n\nPresenta el QR incluido en este correo al llegar al evento.\nCódigo: ${ticket.code}\n\nGuarda este correo y mantén tu entrada privada.`,
     attachments: [{
       filename: "entrada-qr.png", content_type: "image/png", content_id: "ticket-qr",
       content: qr.toString("base64"),

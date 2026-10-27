@@ -5,10 +5,10 @@ import sharp from "sharp";
 import { sendTicketEmail } from "../lib/ticket-email.ts";
 
 const ticket = {
-  code: "a".repeat(64), status: "valid", issued_at: "2026-10-26T12:00:00Z",
+  code: "a".repeat(64), status: "valid", issuedAt: "2026-10-26T12:00:00Z",
   attendee: { name: 'Ana <img src=x onerror="alert(1)">', email: "ana@example.com" },
-  event: { title: "Música & Arte <2026>", venue: 'Foro "Centro" <script>bad()</script>', starts_at: "2026-10-27T01:30:00Z" },
-  ticket_type: { name: "General & amigos" },
+  event: { title: "Música & Arte <2026>", venue: 'Foro "Centro" <script>bad()</script>', startsAt: "2026-10-27T01:30:00Z" },
+  ticketType: { name: "General & amigos" },
 };
 const config = { apiKey: "test-key", from: "Door List <entradas@example.com>" };
 const accepted = () => Response.json({ id: "test-email-id" });

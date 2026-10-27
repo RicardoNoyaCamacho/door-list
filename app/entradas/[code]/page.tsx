@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
+import { formatEventDate } from "@/lib/dates.mjs";
+import { mapPublicTicket } from "@/lib/supabase/mappers";
 import { createClient } from "@/lib/supabase/server";
-import { isTicketCode, type PublicTicket, ticketStatusDetails } from "@/lib/ticket";
+import { isTicketCode, ticketStatusDetails } from "@/lib/ticket";
 import { ticketQrDataUrl } from "@/lib/ticket-qr";
 import { RefreshStatus } from "./refresh-status";
 
@@ -23,12 +25,10 @@ export default async function TicketPage({ params }: { params: Promise<{ code: s
   const { data, error } = await supabase.rpc("get_public_ticket", { p_code: code });
   if (error) throw new Error("No se pudo consultar la entrada.");
   if (!data) notFound();
-  const ticket = data as PublicTicket;
+  const ticket = mapPublicTicket(data);
   const details = ticketStatusDetails[ticket.status];
   const qr = await ticketQrDataUrl(ticket.code);
-  const date = new Intl.DateTimeFormat("es-MX", {
-    timeZone: "America/Mexico_City", dateStyle: "long", timeStyle: "short",
-  }).format(new Date(ticket.event.starts_at));
+  const date = formatEventDate(ticket.event.startsAt);
 
   return (
     <main className="min-h-screen bg-[#f5f0e8] px-5 py-12 text-[#18231f] sm:px-10">
@@ -36,7 +36,7 @@ export default async function TicketPage({ params }: { params: Promise<{ code: s
         <header className="border-b border-[#18231f]/20 pb-7">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4f5d56]">Tu entrada</p>
           <h1 className="mt-3 break-words text-4xl font-semibold tracking-[-0.045em]">{ticket.event.title}</h1>
-          <p className="mt-5"><time dateTime={ticket.event.starts_at}>{date}</time></p>
+          <p className="mt-5"><time dateTime={ticket.event.startsAt}>{date}</time></p>
           <p className="mt-1 text-sm text-[#4f5d56]">Hora de Ciudad de México</p>
           <p className="mt-3 break-words">{ticket.event.venue}</p>
         </header>
@@ -44,7 +44,7 @@ export default async function TicketPage({ params }: { params: Promise<{ code: s
           <dl className="space-y-4">
             <div><dt className="text-sm text-[#4f5d56]">Nombre</dt><dd className="break-words font-semibold">{ticket.attendee.name}</dd></div>
             <div><dt className="text-sm text-[#4f5d56]">Email</dt><dd className="break-all">{ticket.attendee.email}</dd></div>
-            <div><dt className="text-sm text-[#4f5d56]">Tipo de entrada</dt><dd className="break-words">{ticket.ticket_type.name}</dd></div>
+            <div><dt className="text-sm text-[#4f5d56]">Tipo de entrada</dt><dd className="break-words">{ticket.ticketType.name}</dd></div>
           </dl>
         </section>
         <section aria-label="Estado de la entrada" className={`mt-7 border p-4 ${ticket.status === "valid" ? "border-[#89a88a] bg-[#89a88a]/15" : "border-[#b7452b] bg-[#ff6b4a]/10"}`}>

@@ -50,7 +50,7 @@ export function RegistrationForm({ event }: { event: PublicRegistrationEvent }) 
     return <p role="alert" className="mt-8 border border-[#b7452b] p-4">Este evento ya no está disponible para registro.</p>;
   }
 
-  const tickets = (state.availability ?? event).ticket_types;
+  const tickets = (state.availability ?? event).ticketTypes;
   const hasAvailability = tickets.some((ticket) => ticket.remaining > 0);
   const selectedTicket = tickets.some((ticket) => ticket.id === ticketTypeId && ticket.remaining > 0) ? ticketTypeId : "";
 

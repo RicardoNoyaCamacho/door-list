@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { eventDateTimeToIso } from "@/lib/dates.mjs";
+import { eventWrite, ticketTypeWrite } from "@/lib/supabase/mappers";
 import { createClient } from "@/lib/supabase/server";
 
 function text(value: FormDataEntryValue | null) {
@@ -49,19 +51,20 @@ export async function createEvent(formData: FormData) {
   const title = text(formData.get("title"));
   const venue = text(formData.get("venue"));
   const capacity = positiveInteger(formData.get("capacity"));
-  const startsAt = text(formData.get("starts_at"));
+  let startsAt: string;
+  try { startsAt = eventDateTimeToIso(text(formData.get("starts_at"))); }
+  catch { fail("Revisa la fecha y hora del evento."); }
 
   if (!title || !venue || !capacity || !startsAt) fail("Completa los campos obligatorios con valores válidos.");
 
-  const { error } = await supabase.from("events").insert({
-    owner_id: ownerId,
+  const { error } = await supabase.from("events").insert(eventWrite({
     title,
     venue,
     capacity,
-    starts_at: new Date(startsAt).toISOString(),
+    startsAt,
     description: text(formData.get("description")),
     status: "draft",
-  });
+  }, ownerId));
 
   if (error) fail(error.message);
   revalidatePath("/organizador");
@@ -73,7 +76,9 @@ export async function updateEvent(formData: FormData) {
   const title = text(formData.get("title"));
   const venue = text(formData.get("venue"));
   const capacity = positiveInteger(formData.get("capacity"));
-  const startsAt = text(formData.get("starts_at"));
+  let startsAt: string;
+  try { startsAt = eventDateTimeToIso(text(formData.get("starts_at"))); }
+  catch { fail("Revisa la fecha y hora del evento."); }
   const status = text(formData.get("status"));
 
   if (!eventId || !title || !venue || !capacity || !startsAt || !["draft", "published"].includes(status)) {
@@ -86,14 +91,14 @@ export async function updateEvent(formData: FormData) {
 
   const { error } = await supabase
     .from("events")
-    .update({
+    .update(eventWrite({
       title,
       venue,
       capacity,
-      starts_at: new Date(startsAt).toISOString(),
+      startsAt,
       description: text(formData.get("description")),
       status,
-    })
+    }))
     .eq("id", eventId);
 
   if (error) fail(error.message);
@@ -122,7 +127,7 @@ export async function createTicketType(formData: FormData) {
     fail("La suma de los aforos de entrada no puede superar el aforo del evento.");
   }
 
-  const { error } = await supabase.from("ticket_types").insert({ event_id: eventId, name, capacity });
+  const { error } = await supabase.from("ticket_types").insert(ticketTypeWrite(eventId, name, capacity));
   if (error) fail(error.message);
   revalidatePath("/organizador");
 }

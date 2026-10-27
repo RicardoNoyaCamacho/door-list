@@ -1,13 +1,5 @@
-export type TicketStatus = "valid" | "used" | "revoke";
-
-export type PublicTicket = {
-  code: string;
-  status: TicketStatus;
-  issued_at: string;
-  attendee: { name: string; email: string };
-  event: { title: string; venue: string; starts_at: string };
-  ticket_type: { name: string };
-};
+import type { TicketStatus } from "./domain";
+export type { TicketStatus, PublicTicket } from "./domain";
 
 export function isTicketCode(value: unknown): value is string {
   return typeof value === "string" && value.length === 64 && /^[0-9a-f]{64}$/.test(value);

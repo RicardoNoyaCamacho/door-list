@@ -1,21 +1,5 @@
-export type PublicTicketType = { id: string; name: string; remaining: number };
-
-export type PublicRegistrationEvent = {
-  id: string;
-  title: string;
-  description: string;
-  starts_at: string;
-  venue: string;
-  ticket_types: PublicTicketType[];
-};
-
-export type RegistrationState = {
-  status: "idle" | "error" | "success";
-  message?: string;
-  fieldErrors?: Partial<Record<"name" | "email" | "ticket_type_id", string>>;
-  availability?: PublicRegistrationEvent | null;
-  confirmation?: { eventTitle: string; ticketTypeName: string; ticketCode: string; emailStatus: "sent" | "failed" };
-};
+import type { RegistrationState } from "./domain";
+export type { PublicTicketType, PublicRegistrationEvent, RegistrationState } from "./domain";
 
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

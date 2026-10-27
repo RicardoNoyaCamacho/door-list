@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { eventTimeZone, registrationDayStart, type PublicEvent } from "@/lib/public-events";
+import { registrationDayStart, type PublicEvent } from "@/lib/public-events";
+
+import { formatEventDate } from "@/lib/dates.mjs";
+import { mapPublicEvent } from "@/lib/supabase/mappers";
 
 export const instant = false;
 
@@ -18,13 +21,10 @@ export default async function Home() {
       .gte("starts_at", registrationDayStart())
       .order("starts_at", { ascending: true });
     if (error) throw new Error("Public events unavailable");
-    events = (data ?? []) as PublicEvent[];
+    events = (data ?? []).map(mapPublicEvent);
   } catch {
     queryFailed = true;
   }
-  const date = new Intl.DateTimeFormat("es-MX", {
-    timeZone: eventTimeZone, dateStyle: "long", timeStyle: "short",
-  });
 
   return (
     <main className="min-h-screen bg-[#f5f0e8] px-5 py-10 text-[#18231f] sm:px-10">
@@ -55,7 +55,7 @@ export default async function Home() {
               {events.map((event) => (
                 <article key={event.id} className="flex min-w-0 flex-col border border-[#18231f]/15 bg-white/65 p-6 shadow-[0_24px_80px_rgba(24,35,31,0.06)] sm:p-8">
                   <h3 className="break-words text-2xl font-semibold tracking-[-0.025em]">{event.title}</h3>
-                  <p className="mt-4"><time dateTime={event.starts_at}>{date.format(new Date(event.starts_at))}</time></p>
+                  <p className="mt-4"><time dateTime={event.startsAt}>{formatEventDate(event.startsAt)}</time></p>
                   <p className="mt-2 break-words font-medium">{event.venue}</p>
                   {event.description && <p className="mt-4 whitespace-pre-wrap break-words text-[#4f5d56]">{event.description}</p>}
                   <div className="mt-auto pt-6">
