@@ -25,6 +25,9 @@ const rpc = (event, ticket, email = `${randomUUID()}@example.com`, name = "Ana")
 const register = (...args) => JSON.parse(sql(`set role anon; ${rpc(...args)}`));
 const availability = (event) => JSON.parse(sql(`set role anon; select public.get_public_registration_event('${event}');`) || "null");
 const count = (event) => Number(sql(`select count(*) from public.registrations where event_id = '${event}';`));
+const ticketCount = (event) => Number(sql(`select count(*) from public.tickets t join public.registrations r on r.id = t.registration_id where r.event_id = '${event}';`));
+const literal = (value) => value === null ? "null" : `'${value.replaceAll("'", "''")}'`;
+const publicTicket = (code) => JSON.parse(sql(`set role anon; select public.get_public_ticket(${literal(code)});`) || "null");
 
 function concurrent(query) {
   return new Promise((resolve, reject) => {
@@ -70,8 +73,22 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
     sql(readFileSync(new URL(files[0], migrations), "utf8"));
     const existing = fixture({ capacity: 20 });
     sql(`update public.event set capacity = 99 where id = '${existing.event}';`);
-    for (const file of files.slice(1)) sql(readFileSync(new URL(file, migrations), "utf8"));
+    for (const file of files.slice(1)) {
+      if (file.endsWith("_issue_registration_tickets.sql")) {
+        assert.equal(register(existing.event, existing.ticket, "legacy@example.com").code, "success");
+      }
+      sql(readFileSync(new URL(file, migrations), "utf8"));
+    }
     assert.equal(Number(sql(`select capacity from public.event where id = '${existing.event}';`)), 99);
+
+    await t.test("backfills one valid, unpredictable ticket for each existing registration", () => {
+      assert.equal(count(existing.event), 1);
+      assert.equal(ticketCount(existing.event), 1);
+      const code = sql(`select t.code from public.tickets t join public.registrations r on r.id = t.registration_id where r.event_id = '${existing.event}';`);
+      assert.match(code, /^[0-9a-f]{64}$/);
+      assert.equal(publicTicket(code).status, "valid");
+      assert.equal(publicTicket(code).attendee.email, "legacy@example.com");
+    });
 
     await t.test("today (including after start) and future are available; past, draft and missing are private", () => {
       for (const offset of [0, 1]) {
@@ -99,6 +116,7 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
       assert.equal(register(event, ticket, " ANA@EXAMPLE.COM ", " Ana ").code, "success");
       assert.equal(register(event, ticket, "ana@example.com").code, "duplicate");
       assert.equal(count(event), 1);
+      assert.equal(ticketCount(event), 1);
       assert.equal(sql(`select name || ':' || email from public.registrations where event_id = '${event}';`), "Ana:ana@example.com");
       const publicData = JSON.stringify(availability(event));
       assert.ok(!publicData.includes("ana@example.com") && !publicData.includes(owner));
@@ -116,6 +134,7 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
       assert.equal(register(event, ticket).code, "success");
       assert.equal(register(event, ticket).code, "ticket_unavailable");
       assert.equal(count(event), 1);
+      assert.equal(ticketCount(event), 1);
       const removed = fixture({ capacity: 2 });
       const spare = randomUUID();
       sql(`begin; update public.ticket_types set capacity = 1 where id = '${removed.ticket}';
@@ -184,6 +203,85 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
         assert.equal(JSON.parse(sql(`set role ${role}; ${rpc(event, ticket)}`)).code, "success");
       }
       assert.equal(count(event), 2);
+    });
+
+    await t.test("registration issues exactly one ticket and duplicate emails never reveal its code", () => {
+      const { event, ticket } = fixture();
+      const issued = register(event, ticket, "ticket@example.com");
+      assert.equal(issued.code, "success");
+      assert.match(issued.ticket_code, /^[0-9a-f]{64}$/);
+      assert.deepEqual(register(event, ticket, "TICKET@example.com"), { code: "duplicate" });
+      assert.equal(ticketCount(event), 1);
+      const entry = publicTicket(issued.ticket_code);
+      assert.equal(entry.code, issued.ticket_code);
+      assert.equal(entry.status, "valid");
+      assert.deepEqual(entry.attendee, { name: "Ana", email: "ticket@example.com" });
+      assert.equal(entry.event.title, "Evento de prueba");
+      assert.equal(entry.ticket_type.name, "General");
+      assert.ok(!JSON.stringify(entry).includes(owner));
+      const another = register(event, ticket, "another@example.com");
+      assert.notEqual(another.ticket_code, issued.ticket_code);
+      assert.equal(ticketCount(event), 2);
+      const registrationId = sql(`select registration_id from public.tickets where code = '${issued.ticket_code}';`);
+      assert.throws(() => sql(`insert into public.tickets (registration_id) values ('${registrationId}');`), /tickets_registration_id_key/);
+      assert.throws(() => sql(`insert into public.tickets (registration_id, code) values ('${randomUUID()}', '${issued.ticket_code}');`), /tickets_code_key/);
+    });
+
+    await t.test("ticket issuance failure rolls back the attendee and preserves available capacity", () => {
+      const { event, ticket } = fixture();
+      assert.throws(() => sql(`begin;
+        create function pg_temp.reject_test_ticket() returns trigger language plpgsql as $$begin raise exception 'Simulated ticket issuance failure'; end;$$;
+        create trigger reject_test_ticket before insert on public.tickets for each row execute function pg_temp.reject_test_ticket();
+        set role anon; ${rpc(event, ticket)} commit;`), /Simulated ticket issuance failure/);
+      assert.equal(count(event), 0);
+      assert.equal(ticketCount(event), 0);
+      assert.equal(availability(event).ticket_types[0].remaining, 2);
+      assert.equal(register(event, ticket).code, "success");
+      assert.equal(ticketCount(event), 1);
+    });
+
+    await t.test("invalid, truncated, guessed and enumerable identifiers disclose no ticket details", () => {
+      const { event, ticket } = fixture();
+      const issued = register(event, ticket);
+      const registrationId = sql(`select registration_id from public.tickets where code = '${issued.ticket_code}';`);
+      const ticketId = sql(`select id from public.tickets where code = '${issued.ticket_code}';`);
+      for (const value of [null, "", "%", "*", "' OR 1=1 --", "1", registrationId, ticketId, event, "ana@example.com", issued.ticket_code.slice(0, 32), issued.ticket_code.toUpperCase(), `${issued.ticket_code}\n`, "0".repeat(64)]) {
+        assert.equal(publicTicket(value), null);
+      }
+      assert.throws(() => sql("set role anon; select public.get_public_ticket();"), /does not exist/);
+      assert.throws(() => sql("set role anon; select public.generate_entry_code();"), /permission denied/);
+    });
+
+    await t.test("reads current valid, used and revoke states without changing ticket identity", () => {
+      const { event, ticket } = fixture();
+      const { ticket_code: code } = register(event, ticket);
+      for (const status of ["valid", "used", "revoke"]) {
+        sql(`update public.tickets set status = '${status}' where code = '${code}';`);
+        assert.equal(publicTicket(code).status, status);
+        assert.equal(publicTicket(code).code, code);
+      }
+      assert.throws(() => sql(`update public.tickets set status = 'revoked' where code = '${code}';`), /check constraint/);
+      assert.throws(() => sql(`update public.tickets set code = '${"a".repeat(64)}' where code = '${code}';`), /identidad de una entrada/);
+      assert.throws(() => sql(`update public.tickets set registration_id = '${randomUUID()}' where code = '${code}';`), /identidad de una entrada/);
+      // Tickets remain readable after the registration period or publication ends.
+      sql(`update public.event set status = 'draft', starts_at = ${startsAt(-1)} where id = '${event}';`);
+      assert.equal(publicTicket(code).status, "revoke");
+    });
+
+    await t.test("public roles cannot list, forge, duplicate or change tickets", () => {
+      const { event, ticket } = fixture();
+      const { ticket_code: code } = register(event, ticket);
+      const registrationId = sql(`select registration_id from public.tickets where code = '${code}';`);
+      for (const role of ["anon", "authenticated"]) {
+        assert.throws(() => sql(`set role ${role}; select * from public.tickets;`), /permission denied/);
+        assert.throws(() => sql(`set role ${role}; insert into public.tickets (registration_id, code) values ('${registrationId}', '${"a".repeat(64)}');`), /permission denied/);
+        assert.throws(() => sql(`set role ${role}; update public.tickets set status = 'used' where code = '${code}';`), /permission denied/);
+        assert.throws(() => sql(`set role ${role}; delete from public.tickets where code = '${code}';`), /permission denied/);
+        assert.equal(JSON.parse(sql(`set role ${role}; select public.get_public_ticket('${code}');`)).code, code);
+      }
+      assert.equal(publicTicket(code).status, "valid");
+      assert.equal(Number(sql("select count(*) from public.registrations r left join public.tickets t on t.registration_id = r.id where t.id is null;")), 0);
+      assert.equal(Number(sql("select count(*) - count(distinct code) from public.tickets;")), 0);
     });
   } finally {
     docker(["stop", "--time", "1", container]);

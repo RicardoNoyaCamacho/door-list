@@ -18,10 +18,34 @@ Los eventos y tipos de entrada con registros no se pueden eliminar ni reducir po
 debajo de sus plazas ocupadas. Los cambios de entrada y los registros comparten un
 bloqueo del evento para proteger el cupo ante solicitudes concurrentes.
 
+## Emisión de entradas
+
+Cada registro confirmado emite exactamente una fila en `tickets`, con un código
+criptográfico aleatorio de 32 bytes (64 caracteres hexadecimales), único y generado
+por PostgreSQL. La emisión y el registro se confirman en la misma transacción: un
+fallo al emitir la entrada revierte el registro. La migración también emite entradas
+para los registros existentes. El código y el registro asociado son inmutables.
+
+La confirmación enlaza a `/entradas/[code]`, donde se muestran los datos del
+asistente, el evento, el tipo de entrada, el estado actual y el código en un QR
+generado localmente. El QR contiene únicamente el código, sin datos personales.
+El botón «Actualizar estado» vuelve a consultar la base de datos.
+
+Los estados almacenados son exactamente `valid`, `used` y `revoke`; se presentan
+como «Válida», «Utilizada» y «Revocada». Esta funcionalidad no incluye controles de
+check-in o revocación. Visitar la entrada no cambia su estado ni deja de funcionar
+cuando cierra el registro al evento.
+
+El enlace completo actúa como credencial de consulta y debe conservarse de forma
+privada. No hay listados públicos ni consultas por email, registro o identificador
+interno. `get_public_ticket` exige el código completo; los roles públicos no pueden
+leer ni modificar directamente `tickets`. Los reintentos de registro no revelan
+códigos existentes. Las páginas usan `no-store`, `no-referrer` y `noindex`.
+
 ## Verificación
 
-- `npm test`: validación de campos e identificadores (Node.js 22.18+).
-- `npm run test:db`: migraciones, permisos, fechas, duplicados y concurrencia real en
+- `npm test`: validación de campos, códigos y decodificación del QR real (Node.js 22.18+).
+- `npm run test:db`: migraciones, permisos, fechas, emisión atómica, duplicados y concurrencia real en
   PostgreSQL. Requiere Docker; crea un contenedor sin red y lo elimina al terminar.
   Usa `postgres:16` por defecto; puedes cambiar la imagen mediante
   `REGISTRATION_TEST_POSTGRES_IMAGE=postgres:17 npm run test:db`.

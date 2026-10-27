@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { isTicketCode } from "@/lib/ticket";
 import { type PublicRegistrationEvent, type RegistrationState, uuidPattern, validateRegistration } from "@/lib/registration";
 
 export async function registerAttendee(
@@ -32,9 +33,10 @@ export async function registerAttendee(
 
     switch (data?.code) {
       case "success":
+        if (!isTicketCode(data.ticket_code)) throw new Error("Missing issued ticket");
         return {
           status: "success",
-          confirmation: { eventTitle: data.event_title, ticketName: data.ticket_name },
+          confirmation: { eventTitle: data.event_title, ticketName: data.ticket_name, ticketCode: data.ticket_code },
         };
       case "duplicate":
         return { status: "error", message: "Este email ya tiene un registro para este evento." };

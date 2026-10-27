@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import { type PublicRegistrationEvent, type RegistrationState } from "@/lib/registration";
+import { ticketPath } from "@/lib/ticket";
 import { registerAttendee } from "./actions";
 
 const field = "mt-1 w-full border border-[#18231f]/20 bg-white px-3 py-3 text-base outline-none focus:border-[#18231f] disabled:opacity-60";
@@ -33,6 +35,8 @@ export function RegistrationForm({ event }: { event: PublicRegistrationEvent }) 
         <h2 className="text-2xl font-semibold">¡Tu registro está confirmado!</h2>
         <p className="mt-3">Evento: {state.confirmation.eventTitle}</p>
         <p className="mt-1">Entrada: {state.confirmation.ticketName}</p>
+        <Link href={ticketPath(state.confirmation.ticketCode)} prefetch={false} className="mt-5 inline-block bg-[#18231f] px-5 py-3 font-semibold text-white">Ver mi entrada y QR</Link>
+        <p className="mt-3 text-sm text-[#4f5d56]">Guarda el enlace de tu entrada para consultarla después.</p>
       </section>
     );
   }
