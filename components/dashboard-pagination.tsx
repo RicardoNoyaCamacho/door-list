@@ -1,3 +1,4 @@
+import { textLink } from "@/lib/ui";
 import Link from "next/link";
 import { dashboardPageSize } from "@/lib/dashboard";
 
@@ -6,9 +7,9 @@ export function DashboardPagination({ pathname, page, total }: { pathname: strin
   if (pages === 1 && page === 1) return null;
   return (
     <nav aria-label="Paginación" className="mt-6 flex flex-wrap items-center gap-5 text-sm">
-      {page > 1 && <Link href={`${pathname}?pagina=${page - 1}`} prefetch={false} className="font-semibold underline">Anterior</Link>}
+      {page > 1 && <Link href={`${pathname}?pagina=${page - 1}`} prefetch={false} className={textLink}>Anterior</Link>}
       <p>Página {page} · {total} en total</p>
-      {page < pages && <Link href={`${pathname}?pagina=${page + 1}`} prefetch={false} className="font-semibold underline">Siguiente</Link>}
+      {page < pages && <Link href={`${pathname}?pagina=${page + 1}`} prefetch={false} className={textLink}>Siguiente</Link>}
     </nav>
   );
 }

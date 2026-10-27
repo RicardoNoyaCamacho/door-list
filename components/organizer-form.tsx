@@ -1,5 +1,6 @@
 "use client";
 
+import { errorNotice } from "@/lib/ui";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { jsonRequest, requestJson } from "@/lib/api-client";
@@ -31,6 +32,7 @@ export function OrganizerForm({ endpoint, method = "POST", children, className, 
   }
   return <form onSubmit={submit} className={className} aria-busy={pending}>
     <fieldset disabled={pending} className="contents">{children}</fieldset>
-    {message && <p role="alert" className="text-sm text-[#b7452b]">{message}</p>}
+    {pending && <p role="status" className="text-sm text-[#4f5d56] md:col-span-2">Procesando…</p>}
+    {message && <p role="alert" className={`text-sm md:col-span-2 ${errorNotice}`}>{message}</p>}
   </form>;
 }

@@ -1,3 +1,6 @@
+import { EmptyState } from "@/components/empty-state";
+import { PageFrame } from "@/components/page-frame";
+import { formField as field, pageTitle, primaryButton, secondaryButton, textLink, errorNotice } from "@/lib/ui";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -9,8 +12,6 @@ import { mapOrganizerEvent } from "@/lib/supabase/mappers";
 
 // This authenticated dashboard depends on request cookies and live event data.
 export const instant = false;
-
-const field = "mt-1 w-full border border-[#18231f]/20 bg-white px-3 py-2 text-sm outline-none focus:border-[#18231f]";
 
 export default async function OrganizerPage() {
   await connection();
@@ -27,93 +28,92 @@ export default async function OrganizerPage() {
   const displayError = error ? "No pudimos consultar tus eventos. Intenta de nuevo." : null;
 
   return (
-    <main className="min-h-screen bg-[#f5f0e8] px-5 py-10 text-[#18231f] sm:px-10">
-      <div className="mx-auto max-w-6xl">
-        <header className="flex flex-wrap items-start justify-between gap-6 border-b border-[#18231f]/20 pb-8">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4f5d56]">Panel de organizador</p>
-            <h1 className="mt-2 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">Tus eventos</h1>
-          </div>
-          <div className="flex flex-wrap gap-4">
-            <Link href="/dashboard" prefetch={false} className="border border-[#18231f] px-4 py-2 text-sm font-semibold">Ver panel y asistentes</Link>
-            <OrganizerForm endpoint="/api/sesion" method="DELETE" signOut><button className="border border-[#18231f] px-4 py-2 text-sm font-semibold">Cerrar sesión</button></OrganizerForm>
-          </div>
-        </header>
+    <PageFrame>
+      <header className="flex flex-wrap items-center justify-between gap-5 border-b border-[#18231f]/20 pb-6">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4f5d56]">Panel de organizador</p>
+          <h1 className={`mt-4 ${pageTitle}`}>Tus eventos</h1>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <Link href="/dashboard" prefetch={false} className={secondaryButton}>Ver panel y asistentes</Link>
+          <OrganizerForm endpoint="/api/sesion" method="DELETE" signOut><button className={secondaryButton}>Cerrar sesión</button></OrganizerForm>
+        </div>
+      </header>
 
-        {displayError && <p role="alert" className="mt-6 border border-[#b7452b] bg-[#ff6b4a]/15 px-4 py-3 text-sm">{displayError}</p>}
+      {displayError && <p role="alert" className={`mt-5 text-sm ${errorNotice}`}>{displayError}</p>}
 
-        <section className="mt-10 border border-[#18231f]/15 bg-white/65 p-6">
-          <h2 className="text-2xl font-semibold">Crear evento</h2>
-          <p className="mt-1 text-sm text-[#4f5d56]">Los eventos se crean como borrador; podrás publicarlos después de añadir una entrada.</p>
-          <OrganizerForm endpoint="/api/eventos" className="mt-6 grid gap-4 md:grid-cols-2">
-            <label className="text-sm font-medium">Nombre<input name="title" required className={field} /></label>
-            <label className="text-sm font-medium">Lugar<input name="venue" required className={field} /></label>
-            <label className="text-sm font-medium">Fecha y hora<input name="startsAt" type="datetime-local" required className={field} /></label>
-            <label className="text-sm font-medium">Aforo total<input name="capacity" type="number" min="1" required className={field} /></label>
-            <label className="text-sm font-medium md:col-span-2">Descripción<textarea name="description" rows={3} className={field} /></label>
-            <button className="w-fit bg-[#18231f] px-5 py-3 text-sm font-semibold text-white">Crear borrador</button>
+      <section className="mt-10 min-w-0 border border-[#18231f]/15 bg-white/65 p-6">
+        <h2 className="text-2xl font-semibold">Crear evento</h2>
+        <p className="mt-4 text-sm text-[#4f5d56]">Los eventos se crean como borrador; podrás publicarlos después de añadir una entrada.</p>
+        <OrganizerForm endpoint="/api/eventos" className="mt-5 grid gap-4 md:grid-cols-2">
+          <label className="text-sm font-medium">Nombre<input name="title" required className={field} /></label>
+          <label className="text-sm font-medium">Lugar<input name="venue" required className={field} /></label>
+          <label className="text-sm font-medium">Fecha y hora<input name="startsAt" type="datetime-local" required className={field} /></label>
+          <label className="text-sm font-medium">Aforo total<input name="capacity" type="number" min="1" required className={field} /></label>
+          <label className="text-sm font-medium md:col-span-2">Descripción<textarea name="description" rows={3} className={field} /></label>
+          <button className={`w-fit ${primaryButton}`}>Crear borrador</button>
+        </OrganizerForm>
+      </section>
+
+      {events.length > 0 && (
+        <section className="mt-10 min-w-0 border border-[#18231f]/15 bg-white/65 p-6">
+          <h2 className="text-2xl font-semibold">Crear tipo de entrada</h2>
+          <p className="mt-4 text-sm text-[#4f5d56]">Selecciona uno de tus eventos registrados para asignarle la entrada.</p>
+          <OrganizerForm endpoint="/api/eventos/:eventId/tipos-de-entrada" className="mt-5 grid gap-4 md:grid-cols-2">
+            <label className="text-sm font-medium">Evento<select name="eventId" required className={field}><option value="">Selecciona un evento</option>{events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}</select></label>
+            <label className="text-sm font-medium">Nombre<input name="name" placeholder="Ej. General" required className={field} /></label>
+            <label className="text-sm font-medium">Aforo<input name="capacity" type="number" min="1" required className={field} /></label>
+            <button className={secondaryButton}>Añadir entrada</button>
           </OrganizerForm>
         </section>
+      )}
 
-        {events.length > 0 && (
-          <section className="mt-6 border border-[#18231f]/15 bg-white/65 p-6">
-            <h2 className="text-2xl font-semibold">Crear tipo de entrada</h2>
-            <p className="mt-1 text-sm text-[#4f5d56]">Selecciona uno de tus eventos registrados para asignarle la entrada.</p>
-            <OrganizerForm endpoint="/api/eventos/:eventId/tipos-de-entrada" className="mt-6 flex flex-wrap items-end gap-4">
-              <label className="text-sm font-medium">Evento<select name="eventId" required className={`${field} min-w-56`}><option value="">Selecciona un evento</option>{events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}</select></label>
-              <label className="text-sm font-medium">Nombre<input name="name" placeholder="Ej. General" required className={`${field} w-48`} /></label>
-              <label className="text-sm font-medium">Aforo<input name="capacity" type="number" min="1" required className={`${field} w-28`} /></label>
-              <button className="border border-[#18231f] px-4 py-2 text-sm font-semibold">Añadir entrada</button>
-            </OrganizerForm>
-          </section>
-        )}
+      <section aria-label="Tus eventos" className="mt-10 space-y-6">
+        {!displayError && events.length === 0 && <EmptyState title="Aún no hay eventos" description="Usa el formulario de creación para añadir tu primer evento." />}
+        {events.map((event) => {
+          const assigned = event.ticketTypes.reduce((total, ticketType) => total + ticketType.capacity, 0);
+          return (
+            <article key={event.id} className="min-w-0 border border-[#18231f]/15 bg-white/65 p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="min-w-0 break-words text-2xl font-semibold">{event.title}</h2>
+                <span className="text-xs font-semibold uppercase tracking-wide text-[#4f5d56]">{event.status === "published" ? "Publicado" : "Borrador"}</span>
+              </div>
+              {event.status === "published" && (
+                <Link href={`/eventos/${event.id}/registro`} prefetch={false} className={`mt-4 inline-block ${textLink}`}>Abrir página pública de registro</Link>
+              )}
+              <OrganizerForm endpoint={`/api/eventos/${event.id}`} method="PATCH" className="mt-5 grid gap-4 md:grid-cols-2">
+                <input type="hidden" name="eventId" value={event.id} />
+                <label className="text-sm font-medium">Nombre<input name="title" defaultValue={event.title} required className={field} /></label>
+                <label className="text-sm font-medium">Lugar<input name="venue" defaultValue={event.venue} required className={field} /></label>
+                <label className="text-sm font-medium">Fecha y hora<input name="startsAt" type="datetime-local" defaultValue={localDateTime(event.startsAt)} required className={field} /></label>
+                <label className="text-sm font-medium">Aforo total<input name="capacity" type="number" min="1" defaultValue={event.capacity} required className={field} /></label>
+                <label className="text-sm font-medium">Estado<select name="status" defaultValue={event.status} className={field}><option value="draft">Borrador</option><option value="published">Publicado</option></select></label>
+                <label className="text-sm font-medium md:col-span-2">Descripción<textarea name="description" rows={3} defaultValue={event.description} className={field} /></label>
+                <button className={`w-fit ${primaryButton}`}>Guardar evento</button>
+              </OrganizerForm>
+              <OrganizerForm endpoint={`/api/eventos/${event.id}`} method="DELETE" className="mt-3"><input type="hidden" name="eventId" value={event.id} /><button className={`text-[#b7452b] ${textLink} disabled:cursor-not-allowed disabled:opacity-60`}>Eliminar evento</button></OrganizerForm>
 
-        <section className="mt-10 space-y-8">
-          {events.length === 0 && <p className="text-[#4f5d56]">Aún no tienes eventos.</p>}
-          {events.map((event) => {
-            const assigned = event.ticketTypes.reduce((total, ticketType) => total + ticketType.capacity, 0);
-            return (
-              <article key={event.id} className="border border-[#18231f]/15 bg-white/65 p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-2xl font-semibold">{event.title}</h2>
-                  <span className="border border-[#18231f]/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">{event.status === "published" ? "Publicado" : "Borrador"}</span>
+              <div className="mt-10 border-t border-[#18231f]/15 pt-6">
+                <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="break-words text-lg font-semibold">Tipos de entrada</h3><p className="text-sm text-[#4f5d56]">Aforo asignado: {assigned} / {event.capacity}</p></div>
+                <div className="mt-5 space-y-4">
+                  {event.ticketTypes.length === 0 && <EmptyState title="Aún no hay tipos de entrada" description="Añade una entrada con el formulario de arriba para poder publicar este evento." />}
+                  {event.ticketTypes.map((ticketType) => (
+                    <div key={ticketType.id} className="min-w-0 border border-[#18231f]/15 p-6">
+                      <OrganizerForm endpoint={`/api/eventos/${event.id}/tipos-de-entrada/${ticketType.id}`} method="PATCH" className="grid gap-4 md:grid-cols-2">
+                        <input type="hidden" name="ticketTypeId" value={ticketType.id} /><input type="hidden" name="eventId" value={event.id} />
+                        <label className="min-w-0 text-sm font-medium">Nombre<input name="name" defaultValue={ticketType.name} required className={field} /></label>
+                        <label className="min-w-0 text-sm font-medium">Aforo<input name="capacity" type="number" min="1" defaultValue={ticketType.capacity} required className={field} /></label>
+                        <button className={secondaryButton}>Guardar</button>
+                      </OrganizerForm>
+                      <OrganizerForm endpoint={`/api/eventos/${event.id}/tipos-de-entrada/${ticketType.id}`} method="DELETE" className="mt-4"><input type="hidden" name="ticketTypeId" value={ticketType.id} /><button className={`text-[#b7452b] ${textLink} disabled:cursor-not-allowed disabled:opacity-60`}>Eliminar</button></OrganizerForm>
+                    </div>
+                  ))}
                 </div>
-                {event.status === "published" && (
-                  <Link href={`/eventos/${event.id}/registro`} prefetch={false} className="mt-4 inline-block text-sm font-semibold underline">Abrir página pública de registro</Link>
-                )}
-                <OrganizerForm endpoint={`/api/eventos/${event.id}`} method="PATCH" className="mt-5 grid gap-4 md:grid-cols-2">
-                  <input type="hidden" name="eventId" value={event.id} />
-                  <label className="text-sm font-medium">Nombre<input name="title" defaultValue={event.title} required className={field} /></label>
-                  <label className="text-sm font-medium">Lugar<input name="venue" defaultValue={event.venue} required className={field} /></label>
-                  <label className="text-sm font-medium">Fecha y hora<input name="startsAt" type="datetime-local" defaultValue={localDateTime(event.startsAt)} required className={field} /></label>
-                  <label className="text-sm font-medium">Aforo total<input name="capacity" type="number" min="1" defaultValue={event.capacity} required className={field} /></label>
-                  <label className="text-sm font-medium">Estado<select name="status" defaultValue={event.status} className={field}><option value="draft">Borrador</option><option value="published">Publicado</option></select></label>
-                  <label className="text-sm font-medium md:col-span-2">Descripción<textarea name="description" rows={3} defaultValue={event.description} className={field} /></label>
-                  <button className="w-fit bg-[#18231f] px-5 py-3 text-sm font-semibold text-white">Guardar evento</button>
-                </OrganizerForm>
-                <OrganizerForm endpoint={`/api/eventos/${event.id}`} method="DELETE" className="mt-3"><input type="hidden" name="eventId" value={event.id} /><button className="text-sm font-semibold text-[#b7452b]">Eliminar evento</button></OrganizerForm>
-
-                <div className="mt-8 border-t border-[#18231f]/15 pt-6">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-xl font-semibold">Tipos de entrada</h3><p className="text-sm text-[#4f5d56]">Aforo asignado: {assigned} / {event.capacity}</p></div>
-                  <div className="mt-4 space-y-3">
-                    {event.ticketTypes.map((ticketType) => (
-                      <div key={ticketType.id} className="flex flex-wrap items-end gap-3 border border-[#18231f]/10 p-3">
-                        <OrganizerForm endpoint={`/api/eventos/${event.id}/tipos-de-entrada/${ticketType.id}`} method="PATCH" className="flex flex-wrap items-end gap-3">
-                          <input type="hidden" name="ticketTypeId" value={ticketType.id} /><input type="hidden" name="eventId" value={event.id} />
-                          <label className="text-xs font-medium">Nombre<input name="name" defaultValue={ticketType.name} required className={`${field} w-44`} /></label>
-                          <label className="text-xs font-medium">Aforo<input name="capacity" type="number" min="1" defaultValue={ticketType.capacity} required className={`${field} w-24`} /></label>
-                          <button className="border border-[#18231f] px-3 py-2 text-sm font-semibold">Guardar</button>
-                        </OrganizerForm>
-                        <OrganizerForm endpoint={`/api/eventos/${event.id}/tipos-de-entrada/${ticketType.id}`} method="DELETE"><input type="hidden" name="ticketTypeId" value={ticketType.id} /><button className="pb-2 text-sm font-semibold text-[#b7452b]">Eliminar</button></OrganizerForm>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </section>
-      </div>
-    </main>
+              </div>
+            </article>
+          );
+        })}
+      </section>
+    </PageFrame>
   );
 }

@@ -1,3 +1,5 @@
+import { PageFrame } from "@/components/page-frame";
+
 export default function LoadingRegistration() {
-  return <main className="min-h-screen bg-[#f5f0e8] px-6 py-16 text-[#18231f]"><p role="status" className="mx-auto max-w-2xl">Consultando el evento y las entradas disponibles…</p></main>;
+  return <PageFrame><p role="status" aria-busy="true" className="py-12 text-[#4f5d56]">Cargando el evento y las entradas disponibles…</p></PageFrame>;
 }
