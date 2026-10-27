@@ -26,6 +26,21 @@ Otro organizador no puede consultar el detalle aunque el evento esté publicado.
 Las visitas sin sesión se redirigen a `/acceso`; los eventos ajenos o inexistentes
 muestran una página de evento no disponible. No se utiliza una clave de servicio.
 
+El detalle también muestra una gráfica de registros diarios desde la primera
+publicación hasta hoy, con días sin registros en cero y fechas de Ciudad de México.
+Consume `GET /api/eventos/[eventId]/registros-por-dia`, con sesión y acceso exclusivo
+del propietario. Responde `{ publishedAt, publishedAtEstimated, days }`, donde cada
+día contiene `{ date, registrationCount }`; los errores son `{ error }` con HTTP
+400 para un identificador inválido, 401 sin sesión, 403 para un evento ajeno o
+inexistente y 500 si falla la consulta. Los conteos incluyen todos los registros.
+
+Aplica también `20261027140000_add_daily_registration_analytics.sql` antes de
+utilizar la gráfica. Guarda la primera publicación aunque el evento vuelva a
+borrador. Para eventos históricos, estima el inicio con el primer registro o,
+si no existe, con la creación del evento; la gráfica indica esa limitación.
+Los borradores nunca publicados no muestran una serie de datos. La migración
+se valida con `npm run test:db` en un contenedor aislado, sin modificar Supabase.
+
 ## Registro público
 
 La ruta `/eventos/[eventId]/registro` permite registrarse sin cuenta en eventos publicados,

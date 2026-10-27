@@ -7,6 +7,7 @@ import { connection } from "next/server";
 import { dashboardPage, getDashboardEvent } from "@/lib/dashboard";
 import { formatEventDate } from "@/lib/dates.mjs";
 import { DashboardPagination } from "@/components/dashboard-pagination";
+import { EventDailyRegistrations } from "./daily-registrations";
 
 export default async function OrganizerEventDashboardPage({ params, searchParams }: {
   params: Promise<{ eventId: string }>;
@@ -28,6 +29,7 @@ export default async function OrganizerEventDashboardPage({ params, searchParams
         <p className="mt-2 break-words text-[#4f5d56]">{event.venue}</p>
         <p className="mt-6 text-xl font-semibold">{event.registrationCount} / {event.capacity} registros sobre el aforo total</p>
       </header>
+      <EventDailyRegistrations key={event.id} eventId={event.id} />
       <section aria-labelledby="ticket-types-heading" className="mt-10">
         <h2 id="ticket-types-heading" className="text-2xl font-semibold">Tipos de entrada</h2>
         {event.ticketTypes.length === 0 ? <div className="mt-5"><EmptyState title="Aún no hay tipos de entrada" description="Añade un tipo de entrada desde la gestión de eventos para asignar el aforo." /></div> : (
