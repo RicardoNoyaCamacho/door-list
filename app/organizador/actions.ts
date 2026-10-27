@@ -28,20 +28,20 @@ async function organizerClient() {
 
 async function eventCapacity(supabase: Awaited<ReturnType<typeof createClient>>, eventId: string) {
   const { data: event, error: eventError } = await supabase
-    .from("event")
+    .from("events")
     .select("id, capacity")
     .eq("id", eventId)
     .single();
 
   if (eventError || !event) fail("No tienes acceso a ese evento.");
 
-  const { data: tickets, error: ticketsError } = await supabase
+  const { data: ticketTypes, error: ticketTypesError } = await supabase
     .from("ticket_types")
     .select("capacity")
     .eq("event_id", eventId);
 
-  if (ticketsError) fail("No se pudieron consultar los tipos de entrada.");
-  return { event, ticketTotal: (tickets ?? []).reduce((total, ticket) => total + ticket.capacity, 0) };
+  if (ticketTypesError) fail("No se pudieron consultar los tipos de entrada.");
+  return { event, ticketTypeTotal: (ticketTypes ?? []).reduce((total, ticketType) => total + ticketType.capacity, 0) };
 }
 
 export async function createEvent(formData: FormData) {
@@ -53,7 +53,7 @@ export async function createEvent(formData: FormData) {
 
   if (!title || !venue || !capacity || !startsAt) fail("Completa los campos obligatorios con valores válidos.");
 
-  const { error } = await supabase.from("event").insert({
+  const { error } = await supabase.from("events").insert({
     owner_id: ownerId,
     title,
     venue,
@@ -80,12 +80,12 @@ export async function updateEvent(formData: FormData) {
     fail("Revisa los datos del evento.");
   }
 
-  const { ticketTotal } = await eventCapacity(supabase, eventId);
-  if (ticketTotal > capacity) fail("El aforo del evento no puede ser menor que la suma de sus entradas.");
-  if (status === "published" && ticketTotal === 0) fail("Añade al menos un tipo de entrada antes de publicar.");
+  const { ticketTypeTotal } = await eventCapacity(supabase, eventId);
+  if (ticketTypeTotal > capacity) fail("El aforo del evento no puede ser menor que la suma de sus entradas.");
+  if (status === "published" && ticketTypeTotal === 0) fail("Añade al menos un tipo de entrada antes de publicar.");
 
   const { error } = await supabase
-    .from("event")
+    .from("events")
     .update({
       title,
       venue,
@@ -105,7 +105,7 @@ export async function deleteEvent(formData: FormData) {
   const eventId = text(formData.get("event_id"));
   if (!eventId) fail("Evento no válido.");
 
-  const { error } = await supabase.from("event").delete().eq("id", eventId);
+  const { error } = await supabase.from("events").delete().eq("id", eventId);
   if (error) fail(error.message);
   revalidatePath("/organizador");
 }
@@ -117,8 +117,8 @@ export async function createTicketType(formData: FormData) {
   const capacity = positiveInteger(formData.get("capacity"));
   if (!eventId || !name || !capacity) fail("Revisa el nombre y aforo del tipo de entrada.");
 
-  const { event, ticketTotal } = await eventCapacity(supabase, eventId);
-  if (ticketTotal + capacity > event.capacity) {
+  const { event, ticketTypeTotal } = await eventCapacity(supabase, eventId);
+  if (ticketTypeTotal + capacity > event.capacity) {
     fail("La suma de los aforos de entrada no puede superar el aforo del evento.");
   }
 
@@ -129,29 +129,29 @@ export async function createTicketType(formData: FormData) {
 
 export async function updateTicketType(formData: FormData) {
   const { supabase } = await organizerClient();
-  const ticketId = text(formData.get("ticket_id"));
+  const ticketTypeId = text(formData.get("ticket_type_id"));
   const eventId = text(formData.get("event_id"));
   const name = text(formData.get("name"));
   const capacity = positiveInteger(formData.get("capacity"));
-  if (!ticketId || !eventId || !name || !capacity) fail("Revisa el tipo de entrada.");
+  if (!ticketTypeId || !eventId || !name || !capacity) fail("Revisa el tipo de entrada.");
 
-  const { data: ticket, error: ticketError } = await supabase
+  const { data: ticketType, error: ticketTypeError } = await supabase
     .from("ticket_types")
     .select("capacity")
-    .eq("id", ticketId)
+    .eq("id", ticketTypeId)
     .eq("event_id", eventId)
     .single();
-  if (ticketError || !ticket) fail("No tienes acceso a ese tipo de entrada.");
+  if (ticketTypeError || !ticketType) fail("No tienes acceso a ese tipo de entrada.");
 
-  const { event, ticketTotal } = await eventCapacity(supabase, eventId);
-  if (ticketTotal - ticket.capacity + capacity > event.capacity) {
+  const { event, ticketTypeTotal } = await eventCapacity(supabase, eventId);
+  if (ticketTypeTotal - ticketType.capacity + capacity > event.capacity) {
     fail("La suma de los aforos de entrada no puede superar el aforo del evento.");
   }
 
   const { error } = await supabase
     .from("ticket_types")
     .update({ name, capacity })
-    .eq("id", ticketId)
+    .eq("id", ticketTypeId)
     .eq("event_id", eventId);
   if (error) fail(error.message);
   revalidatePath("/organizador");
@@ -159,10 +159,10 @@ export async function updateTicketType(formData: FormData) {
 
 export async function deleteTicketType(formData: FormData) {
   const { supabase } = await organizerClient();
-  const ticketId = text(formData.get("ticket_id"));
-  if (!ticketId) fail("Tipo de entrada no válido.");
+  const ticketTypeId = text(formData.get("ticket_type_id"));
+  if (!ticketTypeId) fail("Tipo de entrada no válido.");
 
-  const { error } = await supabase.from("ticket_types").delete().eq("id", ticketId);
+  const { error } = await supabase.from("ticket_types").delete().eq("id", ticketTypeId);
   if (error) fail(error.message);
   revalidatePath("/organizador");
 }

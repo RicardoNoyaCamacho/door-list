@@ -12,7 +12,7 @@ export default async function Home() {
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
-      .from("event")
+      .from("events")
       .select("id, title, description, starts_at, venue")
       .eq("status", "published")
       .gte("starts_at", registrationDayStart())

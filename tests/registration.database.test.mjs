@@ -41,10 +41,12 @@ function concurrent(query) {
   });
 }
 
+let eventTable = "event";
+
 function fixture({ capacity = 2, offset = 1, status = "published" } = {}) {
   const event = randomUUID(), ticket = randomUUID();
   sql(`begin;
-    insert into public.event (id, owner_id, title, venue, capacity, starts_at, status)
+    insert into public.${eventTable} (id, owner_id, title, venue, capacity, starts_at, status)
       values ('${event}', '${owner}', 'Evento de prueba', 'CDMX', ${capacity}, ${startsAt(offset)}, '${status}');
     insert into public.ticket_types (id, event_id, name, capacity) values ('${ticket}', '${event}', 'General', ${capacity});
     commit;`);
@@ -78,8 +80,9 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
         assert.equal(register(existing.event, existing.ticket, "legacy@example.com").code, "success");
       }
       sql(readFileSync(new URL(file, migrations), "utf8"));
+      if (file.endsWith("_rename_event_to_events.sql")) eventTable = "events";
     }
-    assert.equal(Number(sql(`select capacity from public.event where id = '${existing.event}';`)), 99);
+    assert.equal(Number(sql(`select capacity from public.events where id = '${existing.event}';`)), 99);
 
     await t.test("backfills one valid, unpredictable ticket for each existing registration", () => {
       assert.equal(count(existing.event), 1);
@@ -126,11 +129,11 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
     await t.test("rechecks unpublished, past, deleted and sold-out choices after initial read", () => {
       const { event, ticket } = fixture({ capacity: 1 });
       assert.equal(availability(event).ticket_types[0].remaining, 1);
-      sql(`update public.event set status = 'draft' where id = '${event}';`);
+      sql(`update public.events set status = 'draft' where id = '${event}';`);
       assert.equal(register(event, ticket).code, "event_unavailable");
-      sql(`update public.event set status = 'published', starts_at = ${startsAt(-1)} where id = '${event}';`);
+      sql(`update public.events set status = 'published', starts_at = ${startsAt(-1)} where id = '${event}';`);
       assert.equal(register(event, ticket).code, "event_unavailable");
-      sql(`update public.event set starts_at = ${startsAt()} where id = '${event}';`);
+      sql(`update public.events set starts_at = ${startsAt()} where id = '${event}';`);
       assert.equal(register(event, ticket).code, "success");
       assert.equal(register(event, ticket).code, "ticket_unavailable");
       assert.equal(count(event), 1);
@@ -172,9 +175,9 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
       register(event, ticket); register(event, ticket);
       const organizer = `set role authenticated; set request.jwt.claim.sub = '${owner}';`;
       assert.throws(() => sql(`${organizer} update public.ticket_types set capacity = 1 where id = '${ticket}';`), /menor que sus registros/);
-      assert.throws(() => sql(`${organizer} update public.event set capacity = 1 where id = '${event}';`), /menor que sus registros/);
+      assert.throws(() => sql(`${organizer} update public.events set capacity = 1 where id = '${event}';`), /menor que sus registros/);
       assert.throws(() => sql(`${organizer} delete from public.ticket_types where id = '${ticket}';`), /foreign key constraint/);
-      assert.throws(() => sql(`${organizer} delete from public.event where id = '${event}';`), /foreign key constraint/);
+      assert.throws(() => sql(`${organizer} delete from public.events where id = '${event}';`), /foreign key constraint/);
       const other = fixture();
       assert.throws(() => sql(`update public.ticket_types set event_id = '${other.event}', name = 'Moved' where id = '${ticket}';`), /foreign key constraint/);
     });
@@ -264,7 +267,7 @@ test("public registration database integration", { timeout: 120_000 }, async (t)
       assert.throws(() => sql(`update public.tickets set code = '${"a".repeat(64)}' where code = '${code}';`), /identidad de una entrada/);
       assert.throws(() => sql(`update public.tickets set registration_id = '${randomUUID()}' where code = '${code}';`), /identidad de una entrada/);
       // Tickets remain readable after the registration period or publication ends.
-      sql(`update public.event set status = 'draft', starts_at = ${startsAt(-1)} where id = '${event}';`);
+      sql(`update public.events set status = 'draft', starts_at = ${startsAt(-1)} where id = '${event}';`);
       assert.equal(publicTicket(code).status, "revoke");
     });
 

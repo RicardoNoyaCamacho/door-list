@@ -11,7 +11,7 @@ const field = "mt-1 w-full border border-[#18231f]/20 bg-white px-3 py-3 text-ba
 export function RegistrationForm({ event }: { event: PublicRegistrationEvent }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [ticketId, setTicketId] = useState("");
+  const [ticketTypeId, setTicketTypeId] = useState("");
   const [state, formAction, pending] = useActionState<RegistrationState, FormData>(
     async (previous, formData) => {
       try {
@@ -34,7 +34,7 @@ export function RegistrationForm({ event }: { event: PublicRegistrationEvent }) 
       <section role="status" className="mt-8 border border-[#89a88a] bg-[#89a88a]/15 p-6">
         <h2 className="text-2xl font-semibold">¡Tu registro está confirmado!</h2>
         <p className="mt-3">Evento: {state.confirmation.eventTitle}</p>
-        <p className="mt-1">Entrada: {state.confirmation.ticketName}</p>
+        <p className="mt-1">Entrada: {state.confirmation.ticketTypeName}</p>
         {state.confirmation.emailStatus === "sent" ? (
           <p className="mt-3">Te enviamos un email con los datos del evento y tu QR. Revisa también la carpeta de spam.</p>
         ) : (
@@ -52,7 +52,7 @@ export function RegistrationForm({ event }: { event: PublicRegistrationEvent }) 
 
   const tickets = (state.availability ?? event).ticket_types;
   const hasAvailability = tickets.some((ticket) => ticket.remaining > 0);
-  const selectedTicket = tickets.some((ticket) => ticket.id === ticketId && ticket.remaining > 0) ? ticketId : "";
+  const selectedTicket = tickets.some((ticket) => ticket.id === ticketTypeId && ticket.remaining > 0) ? ticketTypeId : "";
 
   return (
     <form action={formAction} aria-busy={pending} className="mt-8">
@@ -62,7 +62,7 @@ export function RegistrationForm({ event }: { event: PublicRegistrationEvent }) 
       {!hasAvailability && <p role="status" className="mt-5 border border-[#18231f]/20 p-4">No hay entradas disponibles.</p>}
       <fieldset disabled={pending || !hasAvailability} className="mt-6 space-y-5 disabled:opacity-70">
         <label className="block text-sm font-medium" htmlFor="ticket-type">Tipo de entrada
-          <select id="ticket-type" name="ticket_type_id" required value={selectedTicket} onChange={(e) => setTicketId(e.target.value)} className={field} aria-invalid={!!state.fieldErrors?.ticket_type_id} aria-describedby={state.fieldErrors?.ticket_type_id ? "ticket-error" : undefined}>
+          <select id="ticket-type" name="ticket_type_id" required value={selectedTicket} onChange={(e) => setTicketTypeId(e.target.value)} className={field} aria-invalid={!!state.fieldErrors?.ticket_type_id} aria-describedby={state.fieldErrors?.ticket_type_id ? "ticket-error" : undefined}>
             <option value="">Selecciona una entrada</option>
             {tickets.map((ticket) => <option key={ticket.id} value={ticket.id} disabled={ticket.remaining <= 0}>{ticket.name} · {ticket.remaining > 0 ? `${ticket.remaining} disponibles` : "Agotada"}</option>)}
           </select>

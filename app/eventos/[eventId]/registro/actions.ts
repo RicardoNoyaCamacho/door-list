@@ -50,7 +50,7 @@ export async function registerAttendee(
         }
         return {
           status: "success",
-          confirmation: { eventTitle: data.event_title, ticketName: data.ticket_name, ticketCode: data.ticket_code, emailStatus },
+          confirmation: { eventTitle: data.event_title, ticketTypeName: data.ticket_type_name, ticketCode: data.ticket_code, emailStatus },
         };
       }
       case "duplicate":

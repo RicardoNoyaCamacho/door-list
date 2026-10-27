@@ -56,7 +56,7 @@ function setup(t, registration, ticketResult = { data: ticket, error: null }) {
   form.set("ticket_type_id", ticketId);
   return { calls, logger, submit: () => registerAttendee(eventId, { status: "idle" }, form) };
 }
-const success = { data: { code: "success", event_title: "Evento guardado", ticket_name: "General", ticket_code: code }, error: null };
+const success = { data: { code: "success", event_title: "Evento guardado", ticket_type_name: "General", ticket_code: code }, error: null };
 
 test("confirmation sends only after registration commits, to the database email", async (t) => {
   const { calls, submit } = setup(t, success);

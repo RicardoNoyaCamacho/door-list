@@ -40,7 +40,7 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
   if (!claims?.claims?.sub) redirect("/acceso");
 
   const { data, error } = await supabase
-    .from("event")
+    .from("events")
     .select("id, title, description, starts_at, venue, capacity, status, ticket_types(id, name, capacity)")
     .order("starts_at", { ascending: true });
   const events = (data ?? []) as Event[];
@@ -89,7 +89,7 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
         <section className="mt-10 space-y-8">
           {events.length === 0 && <p className="text-[#4f5d56]">Aún no tienes eventos.</p>}
           {events.map((event) => {
-            const assigned = event.ticket_types.reduce((total, ticket) => total + ticket.capacity, 0);
+            const assigned = event.ticket_types.reduce((total, ticketType) => total + ticketType.capacity, 0);
             return (
               <article key={event.id} className="border border-[#18231f]/15 bg-white/65 p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -114,15 +114,15 @@ export default async function OrganizerPage({ searchParams }: { searchParams: Pr
                 <div className="mt-8 border-t border-[#18231f]/15 pt-6">
                   <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-xl font-semibold">Tipos de entrada</h3><p className="text-sm text-[#4f5d56]">Aforo asignado: {assigned} / {event.capacity}</p></div>
                   <div className="mt-4 space-y-3">
-                    {event.ticket_types.map((ticket) => (
-                      <div key={ticket.id} className="flex flex-wrap items-end gap-3 border border-[#18231f]/10 p-3">
+                    {event.ticket_types.map((ticketType) => (
+                      <div key={ticketType.id} className="flex flex-wrap items-end gap-3 border border-[#18231f]/10 p-3">
                         <form action={updateTicketType} className="flex flex-wrap items-end gap-3">
-                          <input type="hidden" name="ticket_id" value={ticket.id} /><input type="hidden" name="event_id" value={event.id} />
-                          <label className="text-xs font-medium">Nombre<input name="name" defaultValue={ticket.name} required className={`${field} w-44`} /></label>
-                          <label className="text-xs font-medium">Aforo<input name="capacity" type="number" min="1" defaultValue={ticket.capacity} required className={`${field} w-24`} /></label>
+                          <input type="hidden" name="ticket_type_id" value={ticketType.id} /><input type="hidden" name="event_id" value={event.id} />
+                          <label className="text-xs font-medium">Nombre<input name="name" defaultValue={ticketType.name} required className={`${field} w-44`} /></label>
+                          <label className="text-xs font-medium">Aforo<input name="capacity" type="number" min="1" defaultValue={ticketType.capacity} required className={`${field} w-24`} /></label>
                           <button className="border border-[#18231f] px-3 py-2 text-sm font-semibold">Guardar</button>
                         </form>
-                        <form action={deleteTicketType}><input type="hidden" name="ticket_id" value={ticket.id} /><button className="pb-2 text-sm font-semibold text-[#b7452b]">Eliminar</button></form>
+                        <form action={deleteTicketType}><input type="hidden" name="ticket_type_id" value={ticketType.id} /><button className="pb-2 text-sm font-semibold text-[#b7452b]">Eliminar</button></form>
                       </div>
                     ))}
                   </div>
