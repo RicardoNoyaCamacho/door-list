@@ -14,7 +14,7 @@ export type RegistrationState = {
   message?: string;
   fieldErrors?: Partial<Record<"name" | "email" | "ticket_type_id", string>>;
   availability?: PublicRegistrationEvent | null;
-  confirmation?: { eventTitle: string; ticketName: string; ticketCode: string };
+  confirmation?: { eventTitle: string; ticketName: string; ticketCode: string; emailStatus: "sent" | "failed" };
 };
 
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

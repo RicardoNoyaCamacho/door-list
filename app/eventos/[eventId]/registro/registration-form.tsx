@@ -35,6 +35,11 @@ export function RegistrationForm({ event }: { event: PublicRegistrationEvent }) 
         <h2 className="text-2xl font-semibold">¡Tu registro está confirmado!</h2>
         <p className="mt-3">Evento: {state.confirmation.eventTitle}</p>
         <p className="mt-1">Entrada: {state.confirmation.ticketName}</p>
+        {state.confirmation.emailStatus === "sent" ? (
+          <p className="mt-3">Te enviamos un email con los datos del evento y tu QR. Revisa también la carpeta de spam.</p>
+        ) : (
+          <p role="alert" className="mt-3 text-[#b7452b]">Tu entrada está confirmada, pero no pudimos enviar el email. Abre tu entrada y guarda su enlace para conservar el QR.</p>
+        )}
         <Link href={ticketPath(state.confirmation.ticketCode)} prefetch={false} className="mt-5 inline-block bg-[#18231f] px-5 py-3 font-semibold text-white">Ver mi entrada y QR</Link>
         <p className="mt-3 text-sm text-[#4f5d56]">Guarda el enlace de tu entrada para consultarla después.</p>
       </section>
@@ -73,7 +78,7 @@ export function RegistrationForm({ event }: { event: PublicRegistrationEvent }) 
         {state.fieldErrors?.email && <p id="email-error" className="text-sm text-[#b7452b]">{state.fieldErrors.email}</p>}
         <button type="submit" className="w-full bg-[#18231f] px-5 py-3 font-semibold text-white disabled:opacity-60" disabled={pending || !hasAvailability}>{pending ? "Registrando…" : "Confirmar registro"}</button>
       </fieldset>
-      <p role="status" className="mt-3 text-sm text-[#4f5d56]">{pending ? "Estamos comprobando la disponibilidad y guardando tu registro." : "El cupo se confirma al enviar el formulario."}</p>
+      <p role="status" className="mt-3 text-sm text-[#4f5d56]">{pending ? "Estamos comprobando la disponibilidad, guardando tu registro y enviando tu entrada por email." : "El cupo se confirma al enviar el formulario."}</p>
     </form>
   );
 }

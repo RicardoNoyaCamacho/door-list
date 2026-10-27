@@ -5,7 +5,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 La ruta `/eventos/[eventId]/registro` permite registrarse sin cuenta en eventos publicados,
 hasta el final de su fecha en `America/Mexico_City`. El panel del organizador incluye
 el enlace para compartir. Cada registro ocupa una plaza y cada email normalizado admite
-un solo registro por evento. La confirmación aparece en pantalla; no se envían correos.
+un solo registro por evento. La confirmación aparece en pantalla y envía la entrada por email.
 
 Antes de desplegar la página, aplica las migraciones de `supabase/migrations` con el
 flujo habitual del proyecto (`npx supabase db push` para el proyecto vinculado).
@@ -42,9 +42,32 @@ interno. `get_public_ticket` exige el código completo; los roles públicos no p
 leer ni modificar directamente `tickets`. Los reintentos de registro no revelan
 códigos existentes. Las páginas usan `no-store`, `no-referrer` y `noindex`.
 
+## Email de confirmación
+
+Configura `RESEND_API_KEY` y `RESEND_FROM_EMAIL` en el entorno del servidor (también
+en el despliegue). El remitente debe estar autorizado en Resend. Estas variables no
+se exponen al navegador. No se necesitan dependencias adicionales ni migraciones.
+
+Después de confirmar un registro nuevo, el servidor consulta la entrada emitida y
+envía el email mediante la API de Resend. El mensaje incluye nombre del asistente,
+evento, fecha y hora de Ciudad de México, lugar y tipo de entrada. El QR se genera
+localmente como PNG y se adjunta con Content-ID para mostrarse dentro del correo,
+sin abrir enlaces ni descargar imágenes de un servidor externo. Incluye versión
+de texto y el código escrito como alternativa. Los datos del evento se escapan
+antes de insertarlos en el HTML.
+
+El formulario espera la respuesta de Resend y muestra el resultado del envío. Una
+aceptación de la API no garantiza la entrega final al buzón. Los errores de red,
+429 y 5xx se reintentan una vez, con el mismo cuerpo y clave de idempotencia. Si el
+envío falla, se conserva la confirmación del registro y el enlace a la entrada,
+con un aviso para guardarlo. No se vuelve a registrar al asistente ni se envían
+emails al detectar un registro duplicado. No hay cola de reenvío en segundo plano
+ni envío retroactivo para registros existentes.
+
 ## Verificación
 
-- `npm test`: validación de campos, códigos y decodificación del QR real (Node.js 22.18+).
+- `npm test`: validación de campos, códigos, decodificación de QR y envío de emails
+  con Resend simulado, sin enviar mensajes reales (Node.js 22.18+).
 - `npm run test:db`: migraciones, permisos, fechas, emisión atómica, duplicados y concurrencia real en
   PostgreSQL. Requiere Docker; crea un contenedor sin red y lo elimina al terminar.
   Usa `postgres:16` por defecto; puedes cambiar la imagen mediante

@@ -1,7 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { isTicketCode } from "@/lib/ticket";
+import { isTicketCode, type PublicTicket } from "@/lib/ticket";
+import { sendTicketEmail } from "@/lib/ticket-email";
 import { type PublicRegistrationEvent, type RegistrationState, uuidPattern, validateRegistration } from "@/lib/registration";
 
 export async function registerAttendee(
@@ -32,12 +33,26 @@ export async function registerAttendee(
     if (error) throw error;
 
     switch (data?.code) {
-      case "success":
+      case "success": {
         if (!isTicketCode(data.ticket_code)) throw new Error("Missing issued ticket");
+        let emailStatus: "sent" | "failed" = "failed";
+        try {
+          const { data: ticket, error: ticketError } = await supabase.rpc("get_public_ticket", { p_code: data.ticket_code });
+          if (ticketError || !ticket || ticket.code !== data.ticket_code) throw new Error("Missing ticket email details");
+          await sendTicketEmail(ticket as PublicTicket, {
+            apiKey: process.env.RESEND_API_KEY, from: process.env.RESEND_FROM_EMAIL,
+          });
+          emailStatus = "sent";
+        } catch {
+          // Registration and ticket are already committed; never turn an email
+          // failure into a registration retry or expose provider error details.
+          console.error("No se pudo enviar el email de confirmación de entrada.");
+        }
         return {
           status: "success",
-          confirmation: { eventTitle: data.event_title, ticketName: data.ticket_name, ticketCode: data.ticket_code },
+          confirmation: { eventTitle: data.event_title, ticketName: data.ticket_name, ticketCode: data.ticket_code, emailStatus },
         };
+      }
       case "duplicate":
         return { status: "error", message: "Este email ya tiene un registro para este evento." };
       case "event_unavailable":
